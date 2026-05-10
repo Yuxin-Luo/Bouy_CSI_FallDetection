@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+
+# Environment / credentials — NEVER commit these
+.env
+.env.local
+.env*.local
+
+# Database
+*.db
+*.db-wal
+*.db-shm
+apps/server/data
+
+# Build output
+apps/web/.next
+apps/web/out
+dist
+
+# Internal notes
+CLAUDE_CODE_BRIEF.md
+NOTES.md
+
+# OS
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# TypeScript / Next.js
+*.tsbuildinfo
+next-env.d.ts
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+
+# Vercel
+.vercel
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache

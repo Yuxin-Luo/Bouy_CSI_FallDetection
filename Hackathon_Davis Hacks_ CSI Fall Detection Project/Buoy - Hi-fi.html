@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Buoy — Hi-fi caregiver screens</title>
+<style>
+  html, body { margin:0; padding:0; background:#EFEFF4; min-height:100%;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif; color:#1c1c1e; }
+  .intro { max-width: 880px; margin: 0 auto; padding: 24px 24px 8px; }
+  .intro h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.4px; margin: 0; }
+  .intro p { font-size: 15px; color: rgba(60,60,67,0.65); margin-top: 6px; line-height: 1.45; }
+  .grid {
+    display: grid; gap: 28px; padding: 16px 24px 64px;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    max-width: 1700px; margin: 0 auto;
+  }
+  .frame-cap {
+    text-align:center; font-size: 13px; color: rgba(60,60,67,0.7);
+    font-weight: 600; letter-spacing: 0.3px; margin-top: 12px;
+    text-transform: uppercase;
+  }
+  @keyframes gd-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.85); }
+  }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Buoy — caregiver app</h1>
+    <p>Hi-fi iOS · Apple Health–style cards · 5 primary screens · iPhone 15 Pro frames at intended scale.</p>
+  </div>
+
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="gd-primitives.jsx"></script>
+  <script type="text/babel" src="gd-home.jsx"></script>
+  <script type="text/babel" src="gd-map.jsx"></script>
+  <script type="text/babel" src="gd-alerts.jsx"></script>
+  <script type="text/babel" src="gd-notify.jsx"></script>
+  <script type="text/babel" src="gd-more.jsx"></script>
+
+  <script type="text/babel">
+    const { IOSDevice, GDHomeScreen, GDMapScreen, GDAlertsScreen, GDNotifyScreen, GDMoreScreen } = window;
+    const screens = [
+      { c: GDHomeScreen,   n: '01 · Home' },
+      { c: GDMapScreen,    n: '02 · Map' },
+      { c: GDAlertsScreen, n: '03 · Alerts' },
+      { c: GDNotifyScreen, n: '04 · Notify' },
+      { c: GDMoreScreen,   n: '05 · More / Trends' },
+    ];
+    const App = () => (
+      <div className="grid">
+        {screens.map(s => (
+          <div key={s.n} data-screen-label={s.n}>
+            <div style={{display:'flex', justifyContent:'center'}}>
+              <IOSDevice width={390} height={780}>
+                <s.c />
+              </IOSDevice>
+            </div>
+            <div className="frame-cap">{s.n}</div>
+          </div>
+        ))}
+      </div>
+    );
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

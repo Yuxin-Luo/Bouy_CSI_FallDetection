@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSI Fall-Detection — Frontend Wireframes</title>
+  <link rel="stylesheet" href="sketch.css" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; }
+    body { font-family: 'Caveat', 'Architects Daughter', cursive; }
+    .intro {
+      max-width: 720px; margin: 0 auto; padding: 12px 16px;
+      font-family: 'Kalam', sans-serif; color: var(--ink);
+    }
+    .intro h1 { font-family: 'Caveat'; font-size: 32px; margin: 4px 0; }
+    .intro p { font-size: 14px; line-height: 1.4; color: var(--ink-soft); margin: 6px 0; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; font-size: 12px; }
+    .legend span { display: inline-flex; align-items: center; gap: 4px; }
+    .legend i { width: 12px; height: 12px; border-radius: 3px; border: 1.5px solid var(--ink); display:inline-block; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="primitives.jsx"></script>
+  <script type="text/babel" src="screens-onboarding.jsx"></script>
+  <script type="text/babel" src="screens-map.jsx"></script>
+  <script type="text/babel" src="screens-alert.jsx"></script>
+  <script type="text/babel" src="screens-evidence.jsx"></script>
+  <script type="text/babel" src="screens-activity.jsx"></script>
+  <script type="text/babel" src="screens-notif.jsx"></script>
+  <script type="text/babel" src="screens-resident.jsx"></script>
+  <script type="text/babel" src="screens-storyboard.jsx"></script>
+
+  <script type="text/babel">
+    const { OnboardingScreens, MapScreens, AlertScreens, EvidenceScreens,
+      ActivityScreens, NotifScreens, ResidentScreens, StoryboardScreen } = window;
+
+    // Wrap each screen in a paper artboard
+    const PaperBoard = ({ children, h = 660, w = 320 }) => (
+      <div className="paper" style={{ width: w, height: h, padding: 10 }}>{children}</div>
+    );
+
+    const App = () => (
+      <>
+        <SketchyFilter />
+        <div className="intro">
+          <div className="lbl">Wireframe exploration · v1</div>
+          <h1>CSI Fall Detection — Frontend Ideation</h1>
+          <p>Pannable canvas of low-fi sketches. Each row is one screen, with five distinct directions side-by-side. Pan with click+drag; pinch / scroll-wheel to zoom. Click any artboard's expand icon to focus.</p>
+          <div className="legend">
+            <span><i style={{background:'var(--ok-fill)'}}></i>OK / quiet</span>
+            <span><i style={{background:'var(--warn-fill)'}}></i>caution</span>
+            <span><i style={{background:'var(--alert-fill)'}}></i>alert</span>
+            <span><i style={{background:'var(--accent-fill)'}}></i>signal / live</span>
+          </div>
+        </div>
+
+        <DesignCanvas>
+          <DCSection id="onboarding" title="① Post-install landing"
+            subtitle="Team handles physical setup. User opens the app and lands here.">
+            {Object.entries(OnboardingScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['You\'re all set','Here\'s your layout','Dashboard landing','Add caregivers'][i]}
+                width={320} height={660}>
+                <PaperBoard><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="map" title="② Apartment map (headline view)"
+            subtitle="Top-down floor plans with live presence estimation">
+            {Object.entries(MapScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['Calm default','Heatmap dense','Signal trails','Room drill-down','Map + sensor stack'][i]}
+                width={320} height={660}>
+                <PaperBoard><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="alert" title="③ Live fall-alert flow — DUAL-SIDED"
+            subtitle="Both phones light up at once. Caregiver + resident side-by-side. 911 on both ends.">
+            {Object.entries(AlertScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['Lock-screen + check-in','Map + check-in','Watch + wall tablet','Rich + gentle'][i]}
+                width={760} height={700}>
+                <C />
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="notif" title="④ Notifications & contacts"
+            subtitle="Who gets pinged for what">
+            {Object.entries(NotifScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['Rule matrix','Contact cascade','Simple toggles','Scenario presets','Alert simulator'][i]}
+                width={i===0?360:320} height={660}>
+                <PaperBoard w={i===0?360:320}><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="resident" title="⑤ Resident-side UI"
+            subtitle="Simplified — the person being monitored">
+            {Object.entries(ResidentScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['Ambient status','I\'m fine check-in','Big buttons','Tablet wall-mount','Step-out / suspend'][i]}
+                width={i===3?360:320} height={i===3?700:660}>
+                <PaperBoard w={i===3?360:320} h={i===3?680:640}><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="activity" title="⑥ Activity & presence trends"
+            subtitle="Long-term patterns and insights">
+            {Object.entries(ActivityScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['24h strips','Heatmap calendar','Anomaly cards','Multi-metric dash','Story digest'][i]}
+                width={320} height={660}>
+                <PaperBoard><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="evidence" title="⑦ Alert evidence locker (optional drill-down)"
+            subtitle="Post-event review with variance traces. Power-user / clinician view — secondary to the main flow.">
+            {Object.entries(EvidenceScreens).map(([k, C], i) => (
+              <DCArtboard key={k} id={k} label={['Timeline first','Variance traces (advanced)','Video-style scrubber','Alert list','Narrative replay'][i]}
+                width={320} height={660}>
+                <PaperBoard><C /></PaperBoard>
+              </DCArtboard>
+            ))}
+          </DCSection>
+
+          <DCSection id="storyboard" title="⑧ Demo-day storyboard"
+            subtitle="The 4-minute walkthrough — comic-strip frames">
+            <DCArtboard id="story" label="Demo flow · 7 frames" width={1100} height={400}>
+              <div className="paper" style={{ width: 1100, height: 400, padding: 6 }}>
+                <StoryboardScreen />
+              </div>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      </>
+    );
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

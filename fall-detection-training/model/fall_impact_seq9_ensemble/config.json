@@ -1,0 +1,76 @@
+{
+  "model_name": "fall_impact_seq9_lstm_transformer_ensemble",
+  "format": "torchscript",
+  "torchscript_file": "fall_impact_seq9_ensemble.ts.pt",
+  "input_shape": [
+    1,
+    9,
+    32,
+    49,
+    21
+  ],
+  "input_dtype": "float32",
+  "classes": [
+    "NOT_FALL_IMPACT",
+    "FALL_IMPACT"
+  ],
+  "positive_class": "FALL_IMPACT",
+  "positive_class_index": 1,
+  "temperature": 0.3,
+  "thresholds": {
+    "balanced_demo": 0.5,
+    "low_false_alert": 0.8400000000000001
+  },
+  "post_processing": {
+    "merge_gap_sec": 2.0,
+    "cooldown_sec": 8.0,
+    "window_hop_sec": 1.0,
+    "window_duration_sec": 6.0,
+    "seq_len": 9
+  },
+  "source_checkpoints": {
+    "lstm": "outputs\\seq9_lstm_clean_meta\\best_model.pt",
+    "transformer": "outputs\\seq9_transformer_clean_meta\\best_model.pt",
+    "calibration": "outputs\\calibrated_seq9_ensemble_clean\\calibration.json"
+  },
+  "evaluation_summary": {
+    "window_test_default": {
+      "threshold": 0.5,
+      "accuracy": 0.9580152671755725,
+      "balanced_accuracy": 0.934625135820355,
+      "macro_f1": 0.8114244585487143,
+      "impact_precision": 0.5,
+      "impact_recall": 0.9090909090909091,
+      "impact_f1": 0.6451612903225806,
+      "confusion_matrix": [
+        [
+          241,
+          10
+        ],
+        [
+          1,
+          10
+        ]
+      ]
+    },
+    "window_test_at_validation_threshold": {
+      "threshold": 0.8400000000000001,
+      "accuracy": 0.9618320610687023,
+      "balanced_accuracy": 0.8062296269467584,
+      "macro_f1": 0.7816666666666667,
+      "impact_precision": 0.5384615384615384,
+      "impact_recall": 0.6363636363636364,
+      "impact_f1": 0.5833333333333334,
+      "confusion_matrix": [
+        [
+          245,
+          6
+        ],
+        [
+          4,
+          7
+        ]
+      ]
+    }
+  }
+}

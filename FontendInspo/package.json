@@ -1,0 +1,60 @@
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { Leaf, Home, Settings, Users, ArrowLeft } from "lucide-react";
+
+export const Route = createFileRoute("/resident")({
+  component: ResidentLayout,
+});
+
+const tabs = [
+  { to: "/resident", label: "Today", Icon: Home, exact: true },
+  { to: "/resident/settings", label: "Safety", Icon: Settings },
+  { to: "/resident/caregivers", label: "Family", Icon: Users },
+];
+
+function ResidentLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="border-b border-border/60 bg-card/60 backdrop-blur">
+        <div className="max-w-xl mx-auto px-5 h-16 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-primary text-primary-foreground flex items-center justify-center">
+            <Leaf className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <p className="font-serif text-xl leading-none">Hearth</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Hi Margaret</p>
+          </div>
+          <Link to="/" className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground">
+            <ArrowLeft className="h-3.5 w-3.5" /> Caretaker
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1">
+        <div className="max-w-xl mx-auto px-5 py-6 pb-28">
+          <Outlet />
+        </div>
+      </main>
+
+      <nav className="fixed bottom-0 inset-x-0 border-t border-border/60 bg-card/95 backdrop-blur">
+        <div className="max-w-xl mx-auto grid grid-cols-3">
+          {tabs.map((t) => {
+            const active = t.exact ? pathname === t.to : pathname.startsWith(t.to);
+            return (
+              <Link
+                key={t.to}
+                to={t.to}
+                className={`flex flex-col items-center gap-1 py-3 text-xs ${
+                  active ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <t.Icon className="h-5 w-5" />
+                {t.label}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </div>
+  );
+}

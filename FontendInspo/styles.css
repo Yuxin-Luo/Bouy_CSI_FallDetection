@@ -1,0 +1,31 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { AppShell, PageHeader } from "@/components/AppShell";
+import { CaregiverList } from "@/components/CaregiverList";
+import { Plus } from "lucide-react";
+
+export const Route = createFileRoute("/caregivers")({
+  head: () => ({
+    meta: [
+      { title: "Care circle — Hearth" },
+      { name: "description", content: "Edit caregivers, notification preferences, and escalation rules." },
+    ],
+  }),
+  component: CaregiversPage,
+});
+
+function CaregiversPage() {
+  return (
+    <AppShell>
+      <PageHeader
+        eyebrow="Care circle"
+        title="Who gets notified"
+        description="Manage caregivers connected to this home, what they receive, and the order in which we contact them."
+      >
+        <button className="flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90">
+          <Plus className="h-4 w-4" /> Add caregiver
+        </button>
+      </PageHeader>
+      <CaregiverList />
+    </AppShell>
+  );
+}

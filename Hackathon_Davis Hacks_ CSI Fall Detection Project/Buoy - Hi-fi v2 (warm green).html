@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Buoy — Hi-fi caregiver screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html, body { margin:0; padding:0; background:#EFEAE0; min-height:100%;
+    font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, sans-serif; color:#1F1F1F; }
+  .intro { max-width: 880px; margin: 0 auto; padding: 28px 24px 8px; }
+  .intro h1 { font-family: "DM Serif Display", Georgia, serif; font-size: 36px; font-weight: 400; letter-spacing: -0.4px; margin: 0; color:#1F1F1F; }
+  .intro p { font-size: 14px; color: rgba(31,31,31,0.62); margin-top: 6px; line-height: 1.5; max-width: 640px; }
+  .grid {
+    display: grid; gap: 28px; padding: 16px 24px 64px;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    max-width: 1700px; margin: 0 auto;
+  }
+  .frame-cap {
+    text-align:center; font-size: 11px; color: rgba(31,31,31,0.55);
+    font-weight: 700; letter-spacing: 1.2px; margin-top: 14px;
+    text-transform: uppercase;
+  }
+  @keyframes bv2-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.85); }
+  }
+</style>
+</head>
+<body>
+  <div class="intro">
+    <h1>Buoy — caregiver app</h1>
+    <p>Warm white &amp; green direction. Google-suite structure (search bar, Material chips, tonal surfaces, M3 nav) with Beli's editorial type, ranked lists, and big score moments. iPhone 15 Pro frames at intended scale.</p>
+  </div>
+
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <script type="text/babel" src="buoy-v2.jsx"></script>
+
+  <script type="text/babel">
+    const { IOSDevice, BvHome, BvMap, BvAlerts, BvPeople, BvMore } = window;
+    const screens = [
+      { c: BvHome,   n: '01 · Home' },
+      { c: BvMap,    n: '02 · Map' },
+      { c: BvAlerts, n: '03 · Alerts' },
+      { c: BvPeople, n: '04 · People' },
+      { c: BvMore,   n: '05 · More' },
+    ];
+    const App = () => (
+      <div className="grid">
+        {screens.map(s => (
+          <div key={s.n} data-screen-label={s.n}>
+            <div style={{display:'flex', justifyContent:'center'}}>
+              <IOSDevice width={390} height={780}>
+                <s.c />
+              </IOSDevice>
+            </div>
+            <div className="frame-cap">{s.n}</div>
+          </div>
+        ))}
+      </div>
+    );
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

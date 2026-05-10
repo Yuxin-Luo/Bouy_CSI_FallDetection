@@ -1,0 +1,17 @@
+# Python deps for the CSI fall-detection training pipeline.
+# Tested with Python 3.12.
+
+# Numerical core
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0           # only needed by csi_har_adapter.py (external data)
+
+# ML
+torch>=2.2            # training + TorchScript ensemble inference
+
+# Serial + visualization (data collection, dashboards)
+pyserial>=3.5
+matplotlib>=3.7
+
+# HTTP (optional, used by live dashboard webhook)
+requests>=2.31
