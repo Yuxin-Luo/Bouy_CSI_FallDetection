@@ -42,3 +42,29 @@ __pycache__
 *.pyc
 *.pyo
 .pytest_cache
+
+# ESP-IDF / ESP32 firmware (fall-detection-training/)
+# Per README.md: "the full esp-csi/ SDK clone is excluded from git"
+fall-detection-training/firmware/esp-csi/
+# Backup of upstream files before applying bouy patch
+fall-detection-training/firmware/.original_esp-csi_backup/
+# IDF build artifacts (per-project build/ dirs under each example)
+fall-detection-training/firmware/**/build/
+fall-detection-training/firmware/**/sdkconfig
+fall-detection-training/firmware/**/sdkconfig.old
+fall-detection-training/firmware/**/dependencies.lock
+# Compiled firmware images
+*.elf
+*.bin
+*.map
+
+# Backup files (e.g. firmware_patches/.csi_*_app_main.c.bouy_v1.bak)
+*.bak
+
+# CSI captures + live chunks (large binary blobs, regenerate from hardware anytime)
+# Per 2026-06-30 review: data/ + capture_*.npz + chunk_*.npz were not ignored
+# before, which let accidental `git add -A` commit MB-sized CSI blobs.
+# capture_multi.py now defaults to <project>/data/raw/ (was relative — bug fixed).
+data/
+**/capture_*.npz
+**/chunk_*.npz

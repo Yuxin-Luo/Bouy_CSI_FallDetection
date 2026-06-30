@@ -56,10 +56,12 @@ flash_one_board() {
     echo ""
     read -p "  Press Enter when the board is plugged in (Ctrl+C to abort)... " _
 
-    # Find the lone connected port
+    # Find the lone connected port (macOS + Linux compatible).
+    #   macOS : /dev/cu.usbserial-*  /  /dev/cu.SLAB_USBtoUART
+    #   Linux : /dev/ttyUSB*  /  /dev/ttyACM*
     local detected
     # shellcheck disable=SC2012
-    detected=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | head -n 1 || true)
+    detected=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -n 1 || true)
 
     if [[ -z "$detected" ]]; then
         echo ""
@@ -67,16 +69,18 @@ flash_one_board() {
         echo "    - Is the cable data-capable (not charge-only)?"
         echo "    - Try a different USB port on your laptop."
         echo "    - Try a different cable from the 3-pack."
+        echo "    - On Linux: are you in the 'dialout' group? (sudo usermod -aG dialout \$USER)"
+        echo "    - On macOS: check System Report → USB"
         return 1
     fi
 
     # Verify exactly one is plugged in
     local count
-    count=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | wc -l | tr -d ' ')
+    count=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | wc -l | tr -d ' ')
     if [[ "$count" -gt 1 ]]; then
         echo ""
         echo "  ⚠ Multiple ESP32 boards detected:"
-        ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | sed 's/^/      /'
+        ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | sed 's/^/      /'
         echo "    Please unplug all but one — the script can only safely flash"
         echo "    one at a time."
         return 1

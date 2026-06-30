@@ -24,6 +24,18 @@
 #include "esp_netif.h"
 #include "esp_now.h"
 
+/* IDF v5 ↔ v6 wifi_bandwidth_t enum compat (backport from ReferenceCode/Mycode).
+ *   IDF v5.x : WIFI_BW_HT20 / WIFI_BW_HT40
+ *   IDF v6.x : WIFI_BW20   / WIFI_BW40
+ * This shim lets the same source compile under either, in case we ever fall back
+ * to an IDF v5 Docker image (e.g. espressif/idf:v5.4) instead of v6.0. */
+#ifndef WIFI_BW_HT20
+#define WIFI_BW_HT20 WIFI_BW20
+#endif
+#ifndef WIFI_BW_HT40
+#define WIFI_BW_HT40 WIFI_BW40
+#endif
+
 #define CONFIG_LESS_INTERFERENCE_CHANNEL   6
 
 #if CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C61 || (CONFIG_IDF_TARGET_ESP32C6 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0))

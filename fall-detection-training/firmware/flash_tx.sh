@@ -45,20 +45,24 @@ echo "  Plug in ONLY the TX board. Unplug all RX boards."
 echo ""
 read -p "  Press Enter when ready (Ctrl+C to abort)... " _
 
+# Detect ESP32 USB-serial port across macOS + Linux.
+#   macOS : /dev/cu.usbserial-*  /  /dev/cu.SLAB_USBtoUART
+#   Linux : /dev/ttyUSB*  /  /dev/ttyACM*
 # shellcheck disable=SC2012
-detected=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | head -n 1 || true)
+detected=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -n 1 || true)
 
 if [[ -z "$detected" ]]; then
     echo ""
     echo "  ✗ No ESP32 detected on USB. Check the cable + USB port."
+    echo "    (Expected: /dev/cu.usbserial-* on macOS, /dev/ttyUSB* on Linux)"
     exit 1
 fi
 
-count=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | wc -l | tr -d ' ')
+count=$(ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$count" -gt 1 ]]; then
     echo ""
     echo "  ⚠ Multiple ESP32 boards detected:"
-    ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART 2>/dev/null | sed 's/^/      /'
+    ls /dev/cu.usbserial-* /dev/cu.SLAB_USBtoUART /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | sed 's/^/      /'
     echo "    Unplug all but the TX board and try again."
     exit 1
 fi

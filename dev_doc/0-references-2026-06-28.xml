@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<references date="2026-06-28" project="Bouy_CSI_FallDetection">
+  <ref id="r001">
+    <title>espressif/esp-csi — Examples get-started (官方 csi_send / csi_recv)</title>
+    <type>repo</type>
+    <url>https://github.com/espressif/esp-csi/tree/master/examples/get-started</url>
+    <local_path>fall-detection-training/firmware/esp-csi/examples/get-started/csi_send/main/app_main.c, fall-detection-training/firmware/esp-csi/examples/get-started/csi_recv/main/app_main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>patch 应用的目标基线；本机 .original_esp-csi_backup/ 保留了上游原版</notes>
+  </ref>
+  <ref id="r002">
+    <title>Bouy firmware_patches/csi_send_app_main.c (patched TX)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/firmware/firmware_patches/csi_send_app_main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>已 copy 到 esp-csi/examples/get-started/csi_send/main/app_main.c；改：channel 11→6, HT40→BW40 (IDF v6 rename), 固定 sender MAC 1a:00:00:00:00:00</notes>
+  </ref>
+  <ref id="r003">
+    <title>Bouy firmware_patches/csi_recv_app_main.c (patched RX)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/firmware/firmware_patches/csi_recv_app_main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>已 copy 到 esp-csi/examples/get-started/csi_recv/main/app_main.c；改：channel 11→6, HT40→BW40 (IDF v6 rename), 复用 MAC 过滤 (原版就有)</notes>
+  </ref>
+  <ref id="r004">
+    <title>Bouy firmware_patches/README.md (patch 应用说明)</title>
+    <type>doc</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/firmware/firmware_patches/README.md</local_path>
+    <status>active</status>
+    <trust>medium</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>README 描述 "RX: Filters incoming CSI by sender MAC" 有误：原版 esp-csi 就带此过滤，patch 真正做的是 TX 端固定 MAC。建议同步修正 README。</notes>
+  </ref>
+  <ref id="r005">
+    <title>ESP-IDF v6.0 wifi_bandwidth_t enum 改名 (HT40 → BW40)</title>
+    <type>doc</type>
+    <url>https://docs.espressif.com/projects/esp-idf/en/v6.0/esp32/api-reference/network/esp_wifi.html</url>
+    <local_path>(无 — 外部文档)</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>IDF v5.x: WIFI_BW_HT20 / WIFI_BW_HT40; IDF v6.x: WIFI_BW20 / WIFI_BW40。bouy 锁 IDF v6.0 因该版本预编译了 libesp_csi_gain_ctrl.a</notes>
+  </ref>
+  <ref id="r006">
+    <title>espressif/idf:release-v6.0 Docker 镜像 (含 libesp_csi_gain_ctrl.a)</title>
+    <type>tool</type>
+    <url>https://hub.docker.com/r/espressif/idf/tags?page=1&amp;name=release-v6.0</url>
+    <local_path>(无 — Docker 镜像)</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>bouy 锁定 v6.0 的原因：v6.1+ 缺 libesp_csi_gain_ctrl.a 预编译；latest 不稳定</notes>
+  </ref>
+  <ref id="r007">
+    <title>esptool.py (flash 工具)</title>
+    <type>tool</type>
+    <url>https://github.com/espressif/esptool</url>
+    <local_path>Python 包，flash_*.sh 通过 python -m esptool 调用</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>支持 macOS / Linux / Windows；脚本已修跨平台 /dev/cu.* + /dev/ttyUSB* 检测</notes>
+  </ref>
+  <ref id="r008">
+    <title>Linux udev 串口权限 (dialout 组)</title>
+    <type>doc</type>
+    <url>https://wiki.archlinux.org/title/Users_and_groups#User_groups</url>
+    <local_path>(无 — 外部文档)</local_path>
+    <status>active</status>
+    <trust>medium</trust>
+    <used_in>4-firmware-patch-application-2026-06-28.md</used_in>
+    <notes>Linux 下访问 /dev/ttyUSB* 需 dialout 组：sudo usermod -aG dialout $USER；已写入 flash_rx.sh 错误信息</notes>
+  </ref>
+  <ref id="r009">
+    <title>ReferenceCode/Mycode/get-started/csi_{send,recv}/main/app_main.c (ESP32-S3 适配参考)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>../Mycode/get-started/csi_send/main/app_main.c, ../Mycode/get-started/csi_recv/main/app_main.c</local_path>
+    <status>active</status>
+    <trust>medium</trust>
+    <used_in>5-s3-specific-patches-2026-06-28.md</used_in>
+    <notes>user 提供的 S3 实测代码；backport 2 个修复到 bouy patch：(1) #ifndef WIFI_BW_HT20/HT40 兼容 shim (csi_send 第 30-36 行, csi_recv 第 30-36 行); (2) first_word_invalid 跳字节处理 (csi_recv 第 212-226 行)。注意：Mycode 仍用 WIFI_BW_HT40 旧名，需 shim 才能在 IDF v6 build；Mycode CONFIG_SEND_FREQUENCY=20 (vs bouy 100) — 本次未 backport。</notes>
+  </ref>
+</references>

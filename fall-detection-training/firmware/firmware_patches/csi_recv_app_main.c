@@ -26,6 +26,18 @@
 #include "esp_now.h"
 #include "esp_csi_gain_ctrl.h"
 
+/* IDF v5 ↔ v6 wifi_bandwidth_t enum compat (backport from ReferenceCode/Mycode).
+ *   IDF v5.x : WIFI_BW_HT20 / WIFI_BW_HT40
+ *   IDF v6.x : WIFI_BW20   / WIFI_BW40
+ * This shim lets the same source compile under either, in case we ever fall back
+ * to an IDF v5 Docker image (e.g. espressif/idf:v5.4) instead of v6.0. */
+#ifndef WIFI_BW_HT20
+#define WIFI_BW_HT20 WIFI_BW20
+#endif
+#ifndef WIFI_BW_HT40
+#define WIFI_BW_HT40 WIFI_BW40
+#endif
+
 #define CONFIG_LESS_INTERFERENCE_CHANNEL   6
 #if CONFIG_IDF_TARGET_ESP32C5 || CONFIG_IDF_TARGET_ESP32C61 || (CONFIG_IDF_TARGET_ESP32C6 && ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 4, 0))
 #define CONFIG_WIFI_BAND_MODE               WIFI_BAND_MODE_2G_ONLY
@@ -200,8 +212,20 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
         ets_printf(",%d", (int16_t)(compensate_gain * csi));
     }
 #else
-    ets_printf(",%d,%d,\"[%d", info->len, info->first_word_invalid, (int16_t)(compensate_gain * info->buf[0]));
-    for (int i = 1; i < info->len; i++) {
+    /* ESP32-S3 / ESP32 / C3 path (backport from ReferenceCode/Mycode).
+     * On ESP32-S3, info->first_word_invalid may be true; in that case the first
+     * 4 bytes of buf are stale LTF metadata rather than CSI subcarriers.
+     * Without this fix the Python parser would mis-align by 4 bytes.
+     * We skip the bad prefix here AND clear the flag in the CSV so the
+     * downstream parser does not double-skip. */
+    int _start = (info->first_word_invalid && info->len > 4) ? 4 : 0;
+    int _fwi   = _start ? 0 : info->first_word_invalid;
+    int _vlen  = info->len - _start;
+    if (_start) {
+        ESP_LOGD(TAG, "first_word_invalid: skipped 4 bytes, valid_len=%d", _vlen);
+    }
+    ets_printf(",%d,%d,\"[%d", _vlen, _fwi, (int16_t)(compensate_gain * info->buf[_start]));
+    for (int i = _start + 1; i < info->len; i++) {
         ets_printf(",%d", (int16_t)(compensate_gain * info->buf[i]));
     }
 #endif
