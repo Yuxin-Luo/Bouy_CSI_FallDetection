@@ -27,11 +27,11 @@ Important trade-off (vs training-time behavior):
     precision drops, switch to 1s/hop chunks and re-combine in this script.
 
 Usage:
-    # Default: watch data/live/, default model + config
+    # Default: watch <project>/data/live/, default model + config
     python infer_loop.py
 
     # Override live dir or threshold
-    python infer_loop.py --live-dir data/live --threshold 0.84
+    python infer_loop.py --live-dir /path/to/other/live --threshold 0.84
 """
 from __future__ import annotations
 
@@ -39,12 +39,21 @@ import argparse
 import json
 import sys
 import time
+import zipfile
 from collections import deque
 from pathlib import Path
+
+# Make pc_tools/ importable so we can share common/state.py with receiver.py.
+# Both scripts live as siblings under src/pc_tools/, so adding their parent
+# resolves `from common.state import load_state` regardless of cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np
 import torch
 from scipy.signal import stft as scipy_stft
+
+# Runtime-tunable params (seq_len, threshold) — see dev_doc §D.9
+from common.state import load_state
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,6 +73,20 @@ WIN_SEC = 6.0
 F_DIM = NPERSEG // 2 + 1                                  # 49
 N_TARGET = int(WIN_SEC * NOMINAL_RATE_HZ)                 # 420
 T_DIM = max(1, (N_TARGET - NOVERLAP) // (NPERSEG - NOVERLAP))  # 21
+
+
+# Resolve project root + shipped-model directory ONCE at import time so all
+# defaults below (live-dir, model, config) are anchored to __file__ and
+# stable regardless of cwd. Same pattern as capture_multi.py / receiver.py.
+#   <project>/src/pc_tools/inference/infer_loop.py
+#   <project>/data/live/                  ← receiver writes here
+#   <project>/fall-detection-training/model/fall_impact_seq9_ensemble/
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+_DEFAULT_LIVE_DIR = _PROJECT_ROOT / "data" / "live"
+_MODEL_DIR = (_PROJECT_ROOT / "fall-detection-training"
+              / "model" / "fall_impact_seq9_ensemble")
+DEFAULT_MODEL = _MODEL_DIR / "fall_impact_seq9_ensemble.ts.pt"
+DEFAULT_CONFIG = _MODEL_DIR / "config.json"
 
 
 def compute_band_spectrogram(chunk_path: Path) -> np.ndarray | None:
@@ -192,25 +215,22 @@ def main() -> int:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    ap.add_argument("--live-dir", type=Path, default=Path("data/live"),
-                    help="Directory to watch for chunk_*.npz files")
+    ap.add_argument("--live-dir", type=Path, default=_DEFAULT_LIVE_DIR,
+                    help="Directory to watch for chunk_*.npz files "
+                         "(default: <project>/data/live/, anchored to __file__)")
 
-    # Resolve model + config paths relative to this script's location so the
-    # command works regardless of cwd:
-    #   <project>/src/pc_tools/inference/infer_loop.py
-    #   <project>/fall-detection-training/model/fall_impact_seq9_ensemble/
-    _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-    _MODEL_DIR = (_PROJECT_ROOT / "fall-detection-training"
-                  / "model" / "fall_impact_seq9_ensemble")
-    default_model = _MODEL_DIR / "fall_impact_seq9_ensemble.ts.pt"
-    default_config = _MODEL_DIR / "config.json"
-    ap.add_argument("--model", type=Path, default=default_model)
-    ap.add_argument("--config", type=Path, default=default_config)
+    # Model + config paths use module-level DEFAULT_MODEL / DEFAULT_CONFIG
+    # (resolved at import time from __file__). Don't re-resolve here —
+    # that'd shadow the module-level variables inside this scope and
+    # trip UnboundLocalError on the --live-dir default above.
+    ap.add_argument("--model", type=Path, default=DEFAULT_MODEL)
+    ap.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     ap.add_argument("--threshold", type=float, default=None,
                     help="FALL_IMPACT probability threshold (default: balanced_demo "
                          "from config.json = 0.50)")
-    ap.add_argument("--seq-len", type=int, default=9,
-                    help="Number of chunks to stack (default 9 — per config.json)")
+    ap.add_argument("--seq-len", type=int, default=None,
+                    help="Number of chunks to stack (default: from runtime_state.json; "
+                         "must equal config.json's seq_len — currently 9 for shipped model)")
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     ap.add_argument("--poll-sec", type=float, default=0.5,
                     help="How often to scan live-dir for new chunks")
@@ -229,8 +249,17 @@ def main() -> int:
 
     cfg = json.load(open(args.config))
     pp = cfg["post_processing"]
-    seq_len = args.seq_len
-    threshold = args.threshold if args.threshold is not None else cfg["thresholds"]["balanced_demo"]
+    # Initial values: argparse > state.json > model default.
+    # These will be reloaded every iteration from state.json — see below.
+    runtime = load_state()
+    seq_len = int(runtime["seq_len"]) if args.seq_len is None else int(args.seq_len)
+    if args.threshold is not None:
+        threshold = float(args.threshold)
+    else:
+        threshold = float(runtime["threshold"])
+        # If user left config.json unconfigured, fall back to model's balanced_demo.
+        if threshold == 0.5 and "balanced_demo" in cfg["thresholds"]:
+            threshold = float(cfg["thresholds"]["balanced_demo"])
     cooldown_sec = pp["cooldown_sec"]
     merge_gap_sec = pp["merge_gap_sec"]
 
@@ -241,7 +270,7 @@ def main() -> int:
           f"thresholds={cfg['thresholds']}")
     print(f"Post-proc  : merge_gap={merge_gap_sec}s  cooldown={cooldown_sec}s  "
           f"seq_len={seq_len}")
-    print(f"Threshold  : {threshold:.3f}")
+    print(f"Threshold  : {threshold:.3f}   (editable via config/runtime_state.json)")
     print(f"Device     : {device}")
     print(f"Live dir   : {args.live_dir}  (poll every {args.poll_sec}s)")
     print()
@@ -255,14 +284,62 @@ def main() -> int:
     last_alert_time = -1e9  # for cooldown
     last_alert_prob = 0.0
 
+    def _resize_ring(new_len: int) -> None:
+        """Resize the ring buffer in-place if seq_len changed mid-run."""
+        nonlocal spec_ring
+        if new_len == spec_ring.maxlen:
+            return
+        old_items = list(spec_ring)
+        # Keep the most recent new_len items.
+        kept = old_items[-new_len:] if len(old_items) > new_len else old_items
+        spec_ring = deque(kept, maxlen=new_len)
+
     try:
         while True:
+            # Poll runtime state for any tuning changes — no I/O unless mtime
+            # changed (mtime cache inside load_state). Applies new seq_len /
+            # threshold within one cycle (~0.5s).
+            runtime = load_state()
+            if args.seq_len is None:
+                new_seq_len = int(runtime["seq_len"])
+                if new_seq_len != spec_ring.maxlen:
+                    _resize_ring(new_seq_len)
+                    print(f"  [{time.strftime('%H:%M:%S')}] "
+                          f"seq_len changed → {new_seq_len} "
+                          f"(state.json updated)",
+                          flush=True)
+                    # Refresh local seq_len for the rest of this iteration.
+                    seq_len = new_seq_len
+            if args.threshold is None:
+                new_threshold = float(runtime["threshold"])
+                if abs(new_threshold - threshold) > 1e-6:
+                    print(f"  [{time.strftime('%H:%M:%S')}] "
+                          f"threshold changed → {new_threshold:.3f} "
+                          f"(state.json updated)",
+                          flush=True)
+                    threshold = new_threshold
+
             chunks = sorted(args.live_dir.glob("chunk_*.npz"))
             new_chunks = [c for c in chunks if c.name not in seen_chunks]
 
             for chunk_path in new_chunks:
+                # Compute spectrogram with defensive guards:
+                # Even though receiver.py now writes atomically (.tmp → rename),
+                # there is still a brief window where the .tmp exists but
+                # hasn't been renamed yet. Also numpy can occasionally raise
+                # EOFError mid-load if the file is mid-finalize. Skip and
+                # retry next poll instead of crashing the loop.
+                try:
+                    spec = compute_band_spectrogram(chunk_path)
+                except (zipfile.BadZipFile, EOFError, OSError) as exc:
+                    print(f"  [{time.strftime('%H:%M:%S')}] "
+                          f"skip {chunk_path.name} ({type(exc).__name__}: "
+                          f"{str(exc)[:60]}) — will retry next poll",
+                          flush=True)
+                    continue
+                # Only mark as seen AFTER the load succeeds, so a partial
+                # read next poll tries again.
                 seen_chunks.add(chunk_path.name)
-                spec = compute_band_spectrogram(chunk_path)
                 if spec is None:
                     print(f"  [{time.strftime('%H:%M:%S')}] "
                           f"skip {chunk_path.name} (no usable data)",
@@ -279,8 +356,26 @@ def main() -> int:
                           flush=True)
                     continue
 
-                # Stack to (seq_len, 32, 49, 21) → add batch dim → (1, seq_len, 32, 49, 21)
-                seq = np.stack(list(spec_ring), axis=0).astype(np.float32)
+                # Stack to (seq_len, 32, 49, 21) → add batch dim.
+                # Guard: the shipped model expects exactly 32 channels (4 RX × 8 bands).
+                # If a chunk was recorded with fewer RX boards, its spectrogram will
+                # be e.g. (24, 49, 21) and stacking will fail with ValueError or the
+                # model will crash with "tensor a (24) must match tensor b (32)".
+                ring_items = list(spec_ring)
+                if not ring_items:
+                    continue
+                canonical_shape = ring_items[0].shape
+                if canonical_shape[0] != 32 or any(s.shape != canonical_shape for s in ring_items):
+                    # Pop the oldest mismatched spec and retry next cycle.
+                    # Don't mark as seen — it will be re-read when receiver fixes itself.
+                    bad = spec_ring.popleft()
+                    print(f"  [{ts_str}] skip — spec shape mismatch "
+                          f"(got {canonical_shape}, expected (32, {F_DIM}, {T_DIM})). "
+                          f"RX count may have changed mid-stream.",
+                          flush=True)
+                    continue
+
+                seq = np.stack(ring_items, axis=0).astype(np.float32)
                 prob = run_model(model, seq, device)
 
                 # Alert logic with cooldown

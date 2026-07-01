@@ -66,5 +66,7 @@ fall-detection-training/firmware/**/dependencies.lock
 # before, which let accidental `git add -A` commit MB-sized CSI blobs.
 # capture_multi.py now defaults to <project>/data/raw/ (was relative — bug fixed).
 data/
+# Recorded session datasets (per-session NPZ/HDF blobs from multi-RX capture)
+dataset/
 **/capture_*.npz
 **/chunk_*.npz

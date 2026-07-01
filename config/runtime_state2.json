@@ -1,0 +1,10 @@
+{
+  "_preset_name": "legacy_6s_per_chunk",
+  "_preset_doc": "PRESET B — pre-D.9 legacy defaults. Bouy-style non-overlapping 6s chunks (54s receptive field, hurts accuracy vs trained 14s, but mirrors Bouy's original CSI cadence and writes 6x fewer NPZ files to disk).",
+
+  "chunk_sec": 6.0,
+  "keep_last": 20,
+  "seq_len": 9,
+  "threshold": 0.5,
+  "phase": "ACTIVE"
+}

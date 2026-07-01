@@ -214,7 +214,30 @@ class Session:
 # ─────────────────────────────────────────────────────────
 
 def discover_ports() -> list[str]:
-    return sorted(glob.glob("/dev/cu.usbserial*") + glob.glob("/dev/cu.SLAB*"))
+    """Auto-discover CSI RX serial ports.
+
+    Detection order (Linux-first, since ESP32-S3 native USB enumerates as ttyACM):
+      1. /dev/ttyACM*   — ESP32-S3 native USB  ← most common for this project
+      2. /dev/ttyUSB*   — CP2102/CH340 UART bridge (older ESP32 dev kits)
+      3. /dev/cu.usbserial* / /dev/cu.SLAB* — macOS (kept for portability)
+    """
+    patterns = [
+        "/dev/ttyACM*",   # Linux: ESP32-S3 native USB  ← our case
+        "/dev/ttyUSB*",   # Linux: UART-bridge ESP32 dev kits
+        "/dev/cu.usbserial*",
+        "/dev/cu.SLAB*",
+    ]
+    found = []
+    for pat in patterns:
+        found.extend(glob.glob(pat))
+    # Deduplicate while preserving order
+    seen = set()
+    unique = []
+    for p in found:
+        if p not in seen:
+            seen.add(p)
+            unique.append(p)
+    return sorted(unique)
 
 
 def parse_port_arg(arg: str, fallback_idx: int) -> tuple[str, str]:

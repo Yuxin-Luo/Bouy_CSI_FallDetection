@@ -1,0 +1,8 @@
+{
+  "chunk_sec": 6.0,
+  "keep_last": 20,
+  "seq_len": 9,
+  "threshold": 0.5,
+  "expected_rx": 4,
+  "phase": "ACTIVE"
+}

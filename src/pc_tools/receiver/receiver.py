@@ -40,10 +40,17 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
+# Make pc_tools/ importable so we can share common/state.py with infer_loop.py.
+# Both scripts live as siblings under src/pc_tools/, so adding their parent
+# resolves `from common.state import load_state` regardless of cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import numpy as np
 
 # Sibling script in the same package directory
 from csi_io import MultiPortReader
+# Runtime-tunable params (chunk_sec, keep_last) — see dev_doc §D.9
+from common.state import load_state
 
 
 def discover_ports() -> list[str]:
@@ -86,16 +93,23 @@ def main() -> int:
                          "Repeat for multiple RXs. If omitted, auto-discover.")
     ap.add_argument("--baud", type=int, default=921600,
                     help="Serial baud (csi_recv firmware uses 921600)")
-    ap.add_argument("--chunk-sec", type=float, default=6.0,
-                    help="Seconds of CSI to seal per NPZ chunk (default 6)")
+    ap.add_argument("--chunk-sec", type=float, default=None,
+                    help="Seconds of CSI per NPZ chunk. Default = runtime_state.json. "
+                         "**Note**: with shipped Bouy model's STFT (nperseg=96, "
+                         "noverlap=80), chunk_sec MUST be ≥2s — see dev_doc §D.10.")
     # Resolve out-dir relative to project root so this works from any cwd:
     #   <project>/src/pc_tools/receiver/receiver.py
     #   <project>/data/live/
     _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
     ap.add_argument("--out-dir", type=Path, default=_PROJECT_ROOT / "data" / "live",
                     help="Where to write chunk_*.npz files (default <project>/data/live/)")
-    ap.add_argument("--keep-last", type=int, default=20,
-                    help="Keep at most this many recent chunks (older auto-deleted)")
+    ap.add_argument("--keep-last", type=int, default=None,
+                    help="Keep at most this many recent chunks on disk. "
+                         "Default = runtime_state.json.")
+    ap.add_argument("--expected-rx", type=int, default=None,
+                    help="Expected number of RX boards (default: from state.json or detect). "
+                         "Warns if fewer ports opened — avoids silent 3-RX chunks that "
+                         "the shipped model (32 channels = 4 × 8 bands) can't consume.")
     ap.add_argument("--name-prefix", type=str, default="chunk",
                     help="Filename prefix (default 'chunk')")
     args = ap.parse_args()
@@ -118,7 +132,12 @@ def main() -> int:
     for path, name in port_specs:
         print(f"  {name:<5} {path}")
     print(f"Output dir : {args.out_dir}")
-    print(f"Chunk size : {args.chunk_sec:.1f}s   Keep last: {args.keep_last}")
+
+    # Initial runtime-tunable values; will be reloaded every iteration from
+    # config/runtime_state.json (see dev_doc §D.9).
+    runtime = load_state()
+    print(f"Chunk size : {runtime['chunk_sec']:.1f}s   Keep last: {runtime['keep_last']}  "
+          f"(edit config/runtime_state.json to retune at runtime)")
     print()
 
     # Start the multiplexed reader (single thread → no GIL contention)
@@ -134,17 +153,40 @@ def main() -> int:
     if not living_names:
         print("ERROR: no RXs opened cleanly; aborting.", file=sys.stderr)
         return 2
+    # Model expects 4 RX × 8 bands = 32 channels. Running with fewer produces
+    # spectrograms the shipped model can't consume (shape mismatch at forward).
+    expected_rx = int(runtime["expected_rx"]) if args.expected_rx is None else args.expected_rx
+    n_opened = len(living_names)
+    if n_opened < expected_rx:
+        print(f"WARNING: only {n_opened} of {expected_rx} expected RX boards opened.",
+              file=sys.stderr)
+        print(f"         Chunks will have {n_opened} columns instead of {expected_rx}; "
+              f"infer_loop will skip them.", file=sys.stderr)
+        print(f"         Wait for all {expected_rx} boards to enumerate, then restart.",
+              file=sys.stderr)
 
     chunk_idx = 0
     last_chunk_time = time.monotonic()
-    print("Streaming... Ctrl-C to stop.\n")
+    # `runtime` was loaded just above for the startup print. Now extract the
+    # numeric values for the streaming loop (will be reloaded every iteration).
+    chunk_sec = float(runtime["chunk_sec"])
+    keep_last = int(runtime["keep_last"])
+    print(f"Streaming... Ctrl-C to stop.")
+    print(f"  Initial: chunk_sec={chunk_sec:.2f}s  keep_last={keep_last}  "
+          f"(edit config/runtime_state.json to retune at runtime)\n")
 
     try:
         while True:
+            # Poll runtime state for any tuning changes — no I/O unless
+            # mtime changed (mtime cache inside load_state).
+            runtime = load_state()
+            chunk_sec = float(runtime["chunk_sec"])
+            keep_last = int(runtime["keep_last"])
+
             now = time.monotonic()
-            if now - last_chunk_time >= args.chunk_sec:
+            if now - last_chunk_time >= chunk_sec:
                 # Seal a chunk: take last chunk_sec seconds from each RX
-                cutoff = now - args.chunk_sec
+                cutoff = now - chunk_sec
                 save: dict[str, np.ndarray] = {
                     "rx_names": np.array(living_names, dtype="U16"),
                     "started_at": np.array(now, dtype=np.float64),
@@ -165,12 +207,29 @@ def main() -> int:
                     any_data = True
 
                 if any_data:
-                    fname = args.out_dir / (
-                        f"{args.name_prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                    final_name = (
+                        f"{args.name_prefix}_"
+                        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                         f"_{chunk_idx:04d}.npz"
                     )
-                    np.savez_compressed(fname, **save)
-                    size_kb = fname.stat().st_size / 1024
+                    final_path = args.out_dir / final_name
+                    # Atomic-write pattern: write to .tmp first, then rename.
+                    # np.savez_compressed() is NOT atomic — it streams the zip
+                    # while open. Without this, infer_loop can np.load() a
+                    # half-written file and crash with zipfile.BadZipFile
+                    # (race we hit on 2026-06-30, see dev_doc §D.8).
+                    # os.replace() on POSIX (and Win since py3.3) is atomic;
+                    # readers only ever see the final file or no file.
+                    #
+                    # GOTCHA: np.savez_compressed(path_string_or_Path)
+                    # auto-appends ".npz" if the path doesn't end in .npz.
+                    # We want tmp at "<basename>.npz.tmp" exactly, so we open
+                    # the file ourselves in binary write mode and pass the fd.
+                    tmp_path = args.out_dir / (final_name + ".tmp")
+                    with open(tmp_path, "wb") as tmp_fd:
+                        np.savez_compressed(tmp_fd, **save)
+                    tmp_path.replace(final_path)
+                    size_kb = final_path.stat().st_size / 1024
                     n_frames_total = sum(
                         save[f"amplitudes_{n}"].shape[0]
                         for _, n in port_specs if f"amplitudes_{n}" in save
@@ -180,13 +239,14 @@ def main() -> int:
                         f"chunk #{chunk_idx:04d}  "
                         f"frames={n_frames_total:>4}  "
                         f"size={size_kb:>5.0f} KB  "
-                        f"→ {fname.name}",
+                        f"→ {final_path.name}",
                         flush=True,
                     )
 
-                    # Auto-cleanup: keep only the most recent keep_last chunks
+                    # Auto-cleanup: keep only the most recent keep_last chunks.
+                    # Uses current-state value (tunable at runtime).
                     chunks = sorted(args.out_dir.glob(f"{args.name_prefix}_*.npz"))
-                    for old in chunks[:-args.keep_last]:
+                    for old in chunks[:-keep_last]:
                         old.unlink()
 
                     chunk_idx += 1
