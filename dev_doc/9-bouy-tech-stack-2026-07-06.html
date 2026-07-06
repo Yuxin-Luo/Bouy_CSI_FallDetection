@@ -326,6 +326,161 @@ metadata.json
     输出 labels_v2.json · 类索引: 0=EMPTY..5=FLOORED (6 类)
   </div>
 </section>
+<!-- ========== §4 特征提取 (★ 深度) ========== -->
+<section id="s4" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§4</div>
+    <h2 class="text-2xl font-semibold text-gray-900">特征提取 (Feature engineering)</h2>
+    <span class="pill pill-amber">★ 深度</span>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    两条独立特征管线喂两条模型。
+    <strong>LSTM 走手工 16 维 / 1 s 窗口</strong>;
+    <strong>CNN 走 32 通道 STFT 频谱 / 6 s 窗口</strong>。
+    二者时间对齐方式不同: LSTM 是 (16 窗口 × 0.5 s hop) 的序列, CNN 是单帧 (49 频 × 21 时)。
+  </p>
+
+  <!-- SVG: 192 subs → 8 bands 切片 -->
+  <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <svg viewBox="0 0 700 200" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+      <!-- Title -->
+      <text x="20" y="20" font-family="sans-serif" font-size="13" fill="#374151" font-weight="600">192 subcarriers → 8 bands</text>
+      <!-- bar of 192 subs (one RX) -->
+      <g>
+        <rect x="40" y="40" width="620" height="20" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>
+        <!-- 8 band shading -->
+        <g fill="#bfdbfe" opacity="0.7">
+          <rect x="40" y="40" width="77.5" height="20"/>
+          <rect x="117.5" y="40" width="77.5" height="20"/>
+          <rect x="195" y="40" width="77.5" height="20"/>
+          <rect x="272.5" y="40" width="77.5" height="20"/>
+          <rect x="350" y="40" width="77.5" height="20"/>
+          <rect x="427.5" y="40" width="77.5" height="20"/>
+          <rect x="505" y="40" width="77.5" height="20"/>
+          <rect x="582.5" y="40" width="77.5" height="20"/>
+        </g>
+        <!-- band separators -->
+        <g stroke="#1d4ed8" stroke-width="1" stroke-dasharray="2 2">
+          <line x1="117.5" y1="40" x2="117.5" y2="60"/>
+          <line x1="195" y1="40" x2="195" y2="60"/>
+          <line x1="272.5" y1="40" x2="272.5" y2="60"/>
+          <line x1="350" y1="40" x2="350" y2="60"/>
+          <line x1="427.5" y1="40" x2="427.5" y2="60"/>
+          <line x1="505" y1="40" x2="505" y2="60"/>
+          <line x1="582.5" y1="40" x2="582.5" y2="60"/>
+          <line x1="660" y1="40" x2="660" y2="60"/>
+        </g>
+        <text x="350" y="78" font-family="monospace" font-size="10" text-anchor="middle" fill="#374151">
+          sub 0..191 (per RX, mean amplitude across subs per band → 1D time series)
+        </text>
+      </g>
+      <!-- arrow -->
+      <line x1="350" y1="90" x2="350" y2="105" stroke="#9ca3af" stroke-width="2"/>
+      <polygon points="345,103 355,103 350,113" fill="#9ca3af"/>
+
+      <!-- 8 bands × STFT -->
+      <g>
+        <text x="20" y="128" font-family="sans-serif" font-size="11" fill="#374151">每 band:</text>
+        <text x="20" y="142" font-family="sans-serif" font-size="11" fill="#374151">1D series (T_packets,)</text>
+        <text x="20" y="156" font-family="sans-serif" font-size="11" fill="#374151">→ STFT(nperseg=96, noverlap=80)</text>
+        <text x="20" y="170" font-family="sans-serif" font-size="11" fill="#374151">→ (49 freq × 21 time)</text>
+      </g>
+      <g>
+        <!-- 4×8 grid showing channels -->
+        <text x="220" y="128" font-family="sans-serif" font-size="11" fill="#374151">4 RX × 8 band = 32 channels</text>
+        <g transform="translate(220,135)">
+          <g font-family="monospace" font-size="10" fill="#374151" text-anchor="middle">
+            <!-- Header row: RX1..RX4 above each block of 8 -->
+            <text x="10" y="0">RX1</text><text x="90" y="0">RX2</text>
+            <text x="170" y="0">RX3</text><text x="250" y="0">RX4</text>
+            <!-- 8 bands × 4 RX as 4 columns of 8 small boxes -->
+            <g fill="#fef3c7" stroke="#a16207" stroke-width="1">
+              <rect x="0" y="5" width="20" height="8"/><rect x="0" y="14" width="20" height="8"/><rect x="0" y="23" width="20" height="8"/><rect x="0" y="32" width="20" height="8"/>
+              <rect x="0" y="41" width="20" height="8"/><rect x="0" y="50" width="20" height="8"/><rect x="0" y="59" width="20" height="8"/><rect x="0" y="68" width="20" height="8"/>
+            </g>
+            <g fill="#dbeafe" stroke="#1d4ed8" stroke-width="1">
+              <rect x="80" y="5" width="20" height="8"/><rect x="80" y="14" width="20" height="8"/><rect x="80" y="23" width="20" height="8"/><rect x="80" y="32" width="20" height="8"/>
+              <rect x="80" y="41" width="20" height="8"/><rect x="80" y="50" width="20" height="8"/><rect x="80" y="59" width="20" height="8"/><rect x="80" y="68" width="20" height="8"/>
+            </g>
+            <g fill="#dcfce7" stroke="#15803d" stroke-width="1">
+              <rect x="160" y="5" width="20" height="8"/><rect x="160" y="14" width="20" height="8"/><rect x="160" y="23" width="20" height="8"/><rect x="160" y="32" width="20" height="8"/>
+              <rect x="160" y="41" width="20" height="8"/><rect x="160" y="50" width="20" height="8"/><rect x="160" y="59" width="20" height="8"/><rect x="160" y="68" width="20" height="8"/>
+            </g>
+            <g fill="#fce7f3" stroke="#9d174d" stroke-width="1">
+              <rect x="240" y="5" width="20" height="8"/><rect x="240" y="14" width="20" height="8"/><rect x="240" y="23" width="20" height="8"/><rect x="240" y="32" width="20" height="8"/>
+              <rect x="240" y="41" width="20" height="8"/><rect x="240" y="50" width="20" height="8"/><rect x="240" y="59" width="20" height="8"/><rect x="240" y="68" width="20" height="8"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- ASCII: 16 维 LSTM 特征向量 -->
+  <div>
+    <h3 class="text-lg font-semibold text-gray-800 mt-6">LSTM 16 维手工特征向量 (每 1 s 窗口)</h3>
+    <pre>每 window (1.0 s, hop 0.5 s), per RX 4 维:
+┌──────────────────────────┬──────────────────────────┐
+│ feat[0] robust_var       │  robust_variance(amps)  │
+│ feat[1] delta_var        │  var_w - var_w-1         │
+│ feat[2] mean_amp         │  float(amps.mean())      │
+│ feat[3] spectral_centroid│  0.5~5 Hz 能量加权频率   │
+└──────────────────────────┴──────────────────────────┘
+4 RX × 4 = 16 维 flat 向量
+跨 16 个窗口 = 序列 (16, 16) → LSTM 1×64 → softmax(6 类)</pre>
+  </div>
+
+  <!-- 公式 details -->
+  <details>
+    <summary>📐 公式细节 (点开看)</summary>
+    <div class="mt-3 space-y-3 text-gray-700">
+      <p><strong>robust_variance (k=3.0):</strong></p>
+      <pre>detrended = amps - amps.mean(axis=0)
+mad = median(|detrended|, axis=0)
+clip = 3.0 × 1.4826 × mad
+variance = mean(clip(detrended, ±clip)²)</pre>
+      <p class="text-xs text-gray-500">MAD-clip 抑制突发尖刺 (路由切换 / 微波炉), k=3.0 ≈ 3σ 等价。</p>
+
+      <p><strong>spectral_centroid_in_band (0.5–5 Hz):</strong></p>
+      <pre>detrend → rfft (axis=0, n=窗口样本数)
+band_mask = (freqs ≥ 0.5 Hz) & (freqs ≤ 5 Hz)
+centroid = Σ(freq × |spec|²) / Σ|spec|² over band</pre>
+      <p class="text-xs text-gray-500">人走动 ≈ 0.5–2 Hz 步频, 跌倒冲击 ≈ 1–5 Hz 宽带。裁掉 >5 Hz 噪声。</p>
+    </div>
+  </details>
+
+  <!-- 超参集中表 -->
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">关键超参一览 (全文检索入口)</h3>
+  <table>
+    <thead>
+      <tr><th>超参</th><th>值</th><th>位置</th><th>为什么</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>NOMINAL_RATE_HZ</code></td><td>70</td><td>infer_loop_ensemble.py:94</td><td>实际采样率漂移容忍</td></tr>
+      <tr><td><code>LSTM_WIN_SEC</code></td><td>1.0</td><td>infer_loop_ensemble.py:99</td><td>走路步频 ~2 Hz, 需 ≥0.5 s</td></tr>
+      <tr><td><code>LSTM_HOP_SEC</code></td><td>0.5</td><td>infer_loop_ensemble.py:100</td><td>50% 重叠, 避免边缘效应</td></tr>
+      <tr><td><code>LSTM_T_SEQ</code></td><td>16</td><td>infer_loop_ensemble.py:101</td><td>16 × 0.5 = 8 s 上文 + 当前 1 s</td></tr>
+      <tr><td><code>LSTM_N_FEAT_PER_RX</code></td><td>4</td><td>infer_loop_ensemble.py:102</td><td>var / delta_var / mean_amp / centroid</td></tr>
+      <tr><td><code>NPERSEG</code></td><td>96</td><td>infer_loop_ensemble.py:91</td><td>49 freq bins, ≈1.4 Hz 分辨率</td></tr>
+      <tr><td><code>NOVERLAP</code></td><td>80</td><td>infer_loop_ensemble.py:92</td><td>16-sample hop → 21 time bins</td></tr>
+      <tr><td><code>N_BANDS</code></td><td>8</td><td>infer_loop_ensemble.py:93</td><td>192/8 = 24 sub/band</td></tr>
+      <tr><td><code>α</code></td><td>0.5</td><td>state.json + ensemble_predict</td><td>balanced (D.22.4 实测最优)</td></tr>
+      <tr><td><code>THRESHOLD</code></td><td>0.5</td><td>frontend/app.py 顶部</td><td>与训练 held-out 校准</td></tr>
+      <tr><td><code>PRIORITY_ORDER</code></td><td>FALL_IMPACT &gt; FLOORED &gt; TRANSITION &gt; WALKING &gt; STILL &gt; EMPTY</td><td>frontend/app.py 顶部</td><td>临床紧迫性</td></tr>
+      <tr><td><code>CHUNK_SEC</code></td><td>6.0</td><td>receiver.py + infer_loop</td><td>边到边 6 s</td></tr>
+      <tr><td><code>UPDATE_HZ</code></td><td>5.0</td><td>frontend/app.py</td><td>UI 红帧率</td></tr>
+      <tr><td><code>QUEUE_MAX</code></td><td>10</td><td>frontend/app.py</td><td>drop-oldest 拥塞控制</td></tr>
+      <tr><td><code>smoothstep dur</code></td><td>6.0 s</td><td>frontend/app.py</td><td>与 chunk 对齐</td></tr>
+    </tbody>
+  </table>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: src/pc_tools/inference/infer_loop_ensemble.py:128-271 (check_rx_presence / chunk_to_*)
+    · fall-detection-training/training/train_lstm.py:59-86 (robust_variance / spectral_centroid)
+    · fall-detection-training/training/train_lstm.py:89-162 (extract_features_for_session)
+    · fall-detection-training/training/train_cnn_deep.py:75-180 (extract_band_spectrograms_for_session)
+  </div>
+</section>
 </main>
 
 <script>
