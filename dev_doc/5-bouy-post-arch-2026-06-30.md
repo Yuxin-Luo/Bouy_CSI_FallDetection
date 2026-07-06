@@ -41,8 +41,8 @@
 | 组件 | 文件 | 状态 |
 |---|---|---|
 | **shipped** 模型 inference | `src/pc_tools/inference/infer_loop.py`（加载 `fall_impact_seq9_ensemble.ts.pt`）| ✅，但**实测在自己房间 prob=0.02-0.09**（§D.11，分布漂移） |
-| **自训** 模型 live inference | `src/pc_tools/inference/infer_loop_ensemble.py`（本轮回写）| ⚠ smoke test 卡在 `load_lstm/CNN` 阶段，未确认 |
-| Flask 前端 | `src/pc_tools/frontend/app.py` | ❌ 未开始（Day 5） |
+| **自训** 模型 live inference | `src/pc_tools/inference/infer_loop_ensemble.py`（本轮回写）| ✅ **2026-07-01 10:12 实测通过**：LSTM 端到端 forward 出概率，输出 `LSTM(t=3955.7) CNN(t=159.0) α=0.50 cls=STILL prob=[EMPTY=0.069 STILL=0.540 WALKI=0.024 TRANS=0.280 FALL_=0.027 FLOOR=0.060]`（详见 `HANDOFF-2026-07-01.md` §3 + `dev_doc/7` §3.5）|
+| Flask 前端 | `src/pc_tools/frontend/app.py` | ❌ 未开始（Day 5）— **2026-07-01 新增任务**：基于 `collection_mouse.py` 风格的实时展示界面（详见下一阶段计划） |
 | 状态文件 | `config/runtime_state.json` | ✅，运行时可调 alpha/chunk_sec/seq_len |
 
 ### 0.4 实测数字（不预测）

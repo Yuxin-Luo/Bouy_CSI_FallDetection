@@ -547,6 +547,410 @@ Linear(64→6)
     · train_cnn_deep.py:372-428 (CSI_DeepCNN)
   </div>
 </section>
+
+<!-- ========== §6 训练 ========== -->
+<section id="s6" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§6</div>
+    <h2 class="text-2xl font-semibold text-gray-900">训练 (Training)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    Session-disjoint (按时段切分) + class-weighted CE 抗不平衡 +
+    ReduceLROnPlateau + 早停。LSTM 跑 CPU 即可, CNN 在 GPU 上 30s/epoch。
+  </p>
+
+  <!-- ASCII: session-disjoint 三折分 -->
+  <h3 class="text-lg font-semibold text-gray-800 mt-4">Session-disjoint split</h3>
+  <pre>Session pool:  s1 s2 s3 s4 s5 s6 s7   (7 sessions in train pool)
+
+                  ┌─────── train ───────┐ ┌─ val ─┐ ┌ test ─┐
+Fold 1:           │ s1 s3 s4 s5 s6 s7 │ │ s2 │ │ s3 │ (held-out)
+Fold 2 (LOOCV):   │ s1 s2 s4 s5 s6 s7 │ │ s3 │ │ s2 │
+...
+每折在 test session 评估 → 7 个 F1 → 平均 = LOOCV F1
+
+约束: 同一 session 的窗口不能跨折 (数据强时序相关)</pre>
+
+  <details>
+    <summary>⚙️ 优化器 / scheduler 默认 (点开看)</summary>
+    <pre>LSTM:
+  optimizer = Adam(lr=1e-3, weight_decay=1e-4)
+  loss = CrossEntropy(weight = inv_freq / sum * n_classes)
+  scheduler = ReduceLROnPlateau(factor=0.5, patience=5, min_lr=1e-5)
+  early_stop = patience=15 on val_macro_f1
+
+CNN:
+  optimizer = AdamW(lr=5e-4, weight_decay=1e-4)
+  loss = CrossEntropy(weighted)
+  scheduler = ReduceLROnPlateau(factor=0.5, patience=8, min_lr=1e-6)
+  early_stop = patience=25
+  augment = SpecAugment(freq_mask=0.15, time_mask=0.15, n_masks=2)</pre>
+  </details>
+
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">关键步骤数据流</h3>
+  <div class="mermaid">
+flowchart LR
+  A[csi.npz + labels_v2.json] --> B[extract_features<br/>16-d 或 32ch spec]
+  B --> C[Session-disjoint split<br/>train/val/test]
+  C --> D[DataLoader batch=32]
+  D --> E[forward + CE loss]
+  E --> F[backward + Adam(W)]
+  F --> G[step scheduler<br/>on val_loss]
+  G --> H{val macro-F1<br/>提升?}
+  H -- yes --> I[save best ckpt]
+  H -- no --> J{patience 满了?}
+  J -- yes --> K[early stop]
+  J -- no --> E
+  </div>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: train_lstm.py:fit() @:368-431 · train_cnn_deep.py:fit() @:458-531
+    · loocv_eval.py (force_test_session 循环)
+  </div>
+</section>
+<!-- ========== §7 Ensemble + 阈值 + 优先级 (★ 深度) ========== -->
+<section id="s7" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§7</div>
+    <h2 class="text-2xl font-semibold text-gray-900">Ensemble + 阈值 + 优先级</h2>
+    <span class="pill pill-amber">★ 深度</span>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    三个独立决策器: LSTM 6-d probs, CNN 6-d probs, priority walker。
+    融合仅是起点 — 最终 "active class banner" 由 <code>pick_active</code>
+    按优先级顺序选第一个 ≥ THRESHOLD 的类别。
+  </p>
+
+  <!-- SVG: alpha 融合条 -->
+  <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <svg viewBox="0 0 700 130" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+      <text x="20" y="20" font-family="sans-serif" font-size="13" font-weight="600" fill="#374151">α 加权融合 (默认 α=0.5)</text>
+      <!-- two inputs -->
+      <rect x="40" y="40" width="140" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+      <text x="110" y="58" font-family="monospace" font-size="13" text-anchor="middle" fill="#1e3a8a">lstm_prob[6]</text>
+      <rect x="40" y="85" width="140" height="30" fill="#dcfce7" stroke="#15803d"/>
+      <text x="110" y="103" font-family="monospace" font-size="13" text-anchor="middle" fill="#14532d">cnn_prob[6]</text>
+      <!-- alpha -->
+      <line x1="195" y1="55" x2="240" y2="55" stroke="#1d4ed8" stroke-width="1.5"/>
+      <text x="217" y="48" font-family="monospace" font-size="11" text-anchor="middle" fill="#1d4ed8">× α</text>
+      <line x1="195" y1="100" x2="240" y2="100" stroke="#15803d" stroke-width="1.5"/>
+      <text x="217" y="93" font-family="monospace" font-size="11" text-anchor="middle" fill="#15803d">× (1−α)</text>
+      <!-- sum -->
+      <circle cx="270" cy="78" r="14" fill="#ffffff" stroke="#6b7280" stroke-width="1.5"/>
+      <text x="270" y="83" font-family="monospace" font-size="14" text-anchor="middle">+</text>
+      <line x1="284" y1="78" x2="350" y2="78" stroke="#374151" stroke-width="1.5"/>
+      <!-- output -->
+      <rect x="350" y="62" width="140" height="30" fill="#fef3c7" stroke="#a16207"/>
+      <text x="420" y="80" font-family="monospace" font-size="13" text-anchor="middle" fill="#713f12">ens_prob[6]</text>
+      <!-- arrow to threshold -->
+      <line x1="500" y1="78" x2="540" y2="78" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="538,73 538,83 548,78" fill="#374151"/>
+      <!-- threshold gate -->
+      <rect x="555" y="50" width="120" height="56" fill="#f9fafb" stroke="#6b7280" stroke-dasharray="3 3"/>
+      <text x="615" y="68" font-family="monospace" font-size="11" text-anchor="middle" fill="#374151">THRESHOLD=0.50</text>
+      <text x="615" y="85" font-family="monospace" font-size="11" text-anchor="middle" fill="#374151">6 类概率</text>
+      <text x="615" y="100" font-family="monospace" font-size="11" text-anchor="middle" fill="#374151">→ priority walker</text>
+    </svg>
+  </div>
+
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">优先级 walker (前端核心)</h3>
+  <div class="mermaid">
+flowchart TD
+  Start[新 chunk 到达] --> Init[重置 winner = None]
+  Init --> Loop{for cls in<br/>PRIORITY_ORDER:}
+  Loop -->|第一轮 FALL_IMPACT| A1{FALL_IMPACT<br/>≥ THRESHOLD?}
+  A1 -- yes --> W1[winner = FALL_IMPACT<br/>break]
+  A1 -- no --> A2{next cls}
+  A2 -->|FLOORED| B1{FLOORED<br/>≥ THRESHOLD?}
+  B1 -- yes --> W2[winner = FLOORED]
+  B1 -- no --> B2[next]
+  B2 --> ... --> End[若全空 → 'EMPTY<br/>(below threshold)']
+  W1 & W2 --> Banner[大字体<br/>active class banner]
+  End -.-> Banner
+  </div>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: infer_loop_ensemble.py:622-630 (α·lstm + (1-α)·cnn) · state.json 热重载 α · frontend/app.py:THRESHOLD=0.50 · pick_active() (priority walker)
+  </div>
+</section>
+<!-- ========== §8 实时推理 ========== -->
+<section id="s8" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§8</div>
+    <h2 class="text-2xl font-semibold text-gray-900">实时推理 (Live inference)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    把训练时相同的 LSTM + CNN 两个 ckpt 加载进 <code>infer_loop_ensemble.py</code>。
+    守护线程 <code>InferenceWorker</code> 轮询 <code>data/live/</code>：
+    每来一个新 chunk NPZ，串行跑 CNN + LSTM，α-fuse，输出 6 类概率。
+  </p>
+
+  <!-- SVG: streaming chunk 流 -->
+  <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <svg viewBox="0 0 700 110" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+      <text x="20" y="20" font-family="sans-serif" font-size="12" font-weight="600" fill="#374151">t_offset timeline (each chunk = 6 s, non-overlapping)</text>
+      <line x1="40" y1="55" x2="660" y2="55" stroke="#6b7280" stroke-width="2"/>
+      <g>
+        <rect x="40" y="40" width="60" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+        <text x="70" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck 0</text>
+        <rect x="100" y="40" width="60" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+        <text x="130" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck 1</text>
+        <rect x="160" y="40" width="60" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+        <text x="190" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck 2</text>
+        <rect x="220" y="40" width="60" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+        <text x="250" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck 3</text>
+        <rect x="280" y="40" width="60" height="30" fill="#dbeafe" stroke="#1d4ed8"/>
+        <text x="310" y="58" font-family="monospace" font-size="10" text-anchor="middle">...</text>
+        <rect x="340" y="40" width="60" height="30" fill="#dcfce7" stroke="#15803d"/>
+        <text x="370" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck N</text>
+        <rect x="400" y="40" width="60" height="30" fill="#dcfce7" stroke="#15803d"/>
+        <text x="430" y="58" font-family="monospace" font-size="10" text-anchor="middle">ck N+1</text>
+      </g>
+      <text x="40" y="92" font-family="monospace" font-size="10" fill="#6b7280">t_offset=0</text>
+      <text x="100" y="92" font-family="monospace" font-size="10" fill="#6b7280">+6 s</text>
+      <text x="160" y="92" font-family="monospace" font-size="10" fill="#6b7280">+12 s</text>
+      <text x="340" y="92" font-family="monospace" font-size="10" fill="#6b7280">+N·6 s</text>
+      <text x="40" y="105" font-family="monospace" font-size="10" fill="#9ca3af">LSTM ring buffer (16 cap) accumulates features across chunks</text>
+    </svg>
+  </div>
+
+  <!-- Mermaid: InferenceWorker 状态机 -->
+  <div class="mermaid">
+stateDiagram-v2
+  [*] --> Init
+  Init --> Loading: load lstm.pt, cnn.pt<br/>recover mu/sd
+  Loading --> Watching: models loaded, watch data/live/
+  Watching --> CheckingRX: new chunk detected
+  CheckingRX --> Fatal: missing rx &amp; strict mode
+  CheckingRX --> CNNPass: all rx present
+  CNNPass --> LSTMPass: chunk_to_cnn_spectrogram + forward → cnn_prob
+  LSTMPass --> Fuse: chunk_to_lstm_features + push ring<br/>if ring ≥ 16 → lstm forward → lstm_prob
+  Fuse --> Emit: α·lstm + (1-α)·cnn → print 1 line
+  Emit --> Watching: t_offset += 6.0
+  Fatal --> [*]: sys.exit(2)
+  </div>
+
+  <details>
+    <summary>🕒 冷启动时序 (~14 s 才到 "LSTM ready") (点开看)</summary>
+    <pre>t=0   : receiver.py + infer_loop_ensemble.py 同时启动
+t=0~6 : 第 1 个 chunk 写完 → CNN 立刻出 cnn_prob 1 个
+        LSTM ring buffer = 0 → 还没有 LSTM 概率
+        屏幕显示 "CNN-only (LSTM warming up)"
+t=6~8 : 第 2 个 chunk 累积 ring buffer (≈11 窗口, 还差 5)
+t=14  : 第 3 个 chunk 末 → ring buffer 满 16 → 第 1 个 LSTM 概率出炉
+        → screen 显示 fused (lstm + cnn)
+此后每个 chunk 6 s 出 1 个新概率</pre>
+  </details>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: infer_loop_ensemble.py:L128-139 (check_rx_presence), L199-271 (chunk_to_lstm_features),
+    L274-283 (features_to_lstm_sequence), L530-647 (主循环)
+  </div>
+</section>
+<!-- ========== §9 前端 (★ 深度) ========== -->
+<section id="s9" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§9</div>
+    <h2 class="text-2xl font-semibold text-gray-900">实时前端 (Real-time UI)</h2>
+    <span class="pill pill-amber">★ 深度</span>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    Matplotlib 4 行布局 + 后台 <code>InferenceWorker</code> 守护线程。
+    关键不变量: <strong>绘制永远不阻塞数据接收</strong>。
+    两个线程靠 <code>queue.Queue(maxsize=10)</code> 解耦, drop-oldest。
+  </p>
+
+  <!-- ASCII: 4 行 matplotlib 布局 -->
+  <h3 class="text-lg font-semibold text-gray-800 mt-4">Matplotlib 4 行布局</h3>
+  <pre>┌────────────────────────────────────────────────────┐
+│ Row 0: ACTIVE CLASS BANNER  (巨字, 颜色编码)        │  ← priority winner
+│         例: "STILL"  (黑边)                        │
+├────────────────────────────────────────────────────┤
+│ Row 1: 4 RX 频谱 (subcarrier 0..191 × amplitude)   │  ← 新 chunk 触发
+│         RX1=蓝, RX2=橙, RX3=绿, RX4=红             │     6s smoothstep
+├────────────────────────────────────────────────────┤
+│ Row 2: 6 类概率条 (横向, 红虚线 THRESHOLD=0.50)     │  ← display_probs
+│         EMPTY STILL WALKING TRANS FALL_ FLOOR      │     6s smoothstep
+├────────────────────────────────────────────────────┤
+│ Row 3: 状态行                                       │  ← monospace
+│         chunk=t=185.4 lstm_warm=16/16 α=0.50       │
+│         last10=[STILL,STILL,WALK,TRANS,FALL_,...]  │
+└────────────────────────────────────────────────────┘</pre>
+
+  <!-- SVG: worker ↔ UI thread queue -->
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">线程解耦</h3>
+  <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+    <svg viewBox="0 0 700 180" class="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+      <!-- worker thread -->
+      <rect x="20" y="20" width="220" height="140" fill="#dbeafe" stroke="#1d4ed8"/>
+      <text x="130" y="40" font-family="monospace" font-size="12" text-anchor="middle" fill="#1e3a8a" font-weight="600">InferenceWorker (daemon thread)</text>
+      <text x="130" y="60" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">while not stop:</text>
+      <text x="130" y="76" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">  glob data/live/*.npz</text>
+      <text x="130" y="92" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">  check_rx_presence</text>
+      <text x="130" y="108" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">  CNN forward + LSTM forward</text>
+      <text x="130" y="124" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">  α-fuse</text>
+      <text x="130" y="140" font-family="monospace" font-size="11" text-anchor="middle" fill="#1e3a8a">  queue.put(frame, timeout=0)</text>
+      <!-- Queue -->
+      <rect x="270" y="55" width="160" height="70" fill="#fef3c7" stroke="#a16207" stroke-dasharray="4 4"/>
+      <text x="350" y="75" font-family="monospace" font-size="12" text-anchor="middle" fill="#713f12" font-weight="600">queue.Queue(maxsize=10)</text>
+      <text x="350" y="92" font-family="monospace" font-size="11" text-anchor="middle" fill="#713f12">drop-oldest 拥塞控制</text>
+      <text x="350" y="108" font-family="monospace" font-size="10" text-anchor="middle" fill="#9ca3af">Frame TypedDict</text>
+      <text x="350" y="121" font-family="monospace" font-size="10" text-anchor="middle" fill="#9ca3af">(probs, amp, t_offset, n_windows)</text>
+      <!-- UI thread -->
+      <rect x="460" y="20" width="220" height="140" fill="#dcfce7" stroke="#15803d"/>
+      <text x="570" y="40" font-family="monospace" font-size="12" text-anchor="middle" fill="#14532d" font-weight="600">Frontend (main thread)</text>
+      <text x="570" y="60" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">FuncAnimation @ 5 fps</text>
+      <text x="570" y="76" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">update(_):</text>
+      <text x="570" y="92" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">  drain queue → keep latest</text>
+      <text x="570" y="108" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">  _compute_display_probs</text>
+      <text x="570" y="124" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">  _update_banner + _update_*</text>
+      <text x="570" y="140" font-family="monospace" font-size="11" text-anchor="middle" fill="#14532d">绝不调 numpy/torch</text>
+      <!-- arrows -->
+      <line x1="240" y1="90" x2="265" y2="90" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="263,85 263,95 273,90" fill="#374151"/>
+      <line x1="430" y1="90" x2="455" y2="90" stroke="#374151" stroke-width="1.5"/>
+      <polygon points="453,85 453,95 463,90" fill="#374151"/>
+    </svg>
+  </div>
+
+  <details>
+    <summary>📐 smoothstep 插值 (6 s 跨 chunk 平滑) (点开看)</summary>
+    <pre>新 chunk 到达 → 启动 6 s 插值 (与下一 chunk 同步):
+  α_smooth(t) = (t − t0) / 6.0       # ∈ [0, 1]
+  α_curve = α² × (3 − 2α)              # smoothstep C¹ 连续
+  display_probs = lerp(prev, new, α_curve)
+
+目的: 视觉上 banner / 概率条 / 频谱不会 "硬跳"。
+     像 collection_mouse.py 那样随时间滚动的实时感。</pre>
+  </details>
+
+  <table class="mt-4">
+    <thead><tr><th>关键常量</th><th>值</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td><code>UPDATE_HZ</code></td><td>5.0</td><td>matplotlib FuncAnimation 红帧率</td></tr>
+      <tr><td><code>QUEUE_MAX</code></td><td>10</td><td>UI 跟不上就 drop-oldest 旧帧</td></tr>
+      <tr><td><code>CHUNK_SEC</code></td><td>6.0</td><td>必须与 receiver 一致</td></tr>
+      <tr><td><code>THRESHOLD</code></td><td>0.50</td><td>概率门槛 + 红虚线 y 轴</td></tr>
+      <tr><td><code>PRIORITY_ORDER</code></td><td>FALL_IMPACT&gt;FLOORED&gt;...</td><td>walk(优先)→选 first ≥ threshold</td></tr>
+      <tr><td><code>allow-missing-rxs</code></td><td>flag opt-in</td><td>strict 默认 (HARD-FATAL)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: src/pc_tools/frontend/app.py (~855 行)
+    · InferenceWorker (daemon thread, queue.Queue drain)
+    · 4-row FuncAnimation layout (mirrors collection_mouse.py)
+    · dev_doc/7 (strict RX 政策)
+  </div>
+</section>
+<!-- ========== §10 端到端时延 ========== -->
+<section id="s10" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§10</div>
+    <h2 class="text-2xl font-semibold text-gray-900">端到端时延 (落体发生 → 屏幕显示)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    假设跌倒在 chunk 开始的 t=0 处, "STILL banner → FALL_IMPACT banner" 的链路:
+  </p>
+
+  <pre>事件          时刻 (相对 t=0)
+─────────────  ──────────────────
+跌倒发生       t = 0       ▓
+                            │
+chunk 写出     t ≈ 1-3    │ receiver 攒满下一 chunk 中段触发 (worst case ~3s)
+                            │
+NPZ 落盘      t ≈ 6      │ chunk_sec=6, 最坏 1 个 chunk 延迟
+                            │
+worker 轮询    t ≈ 6.5    │ poll_sec=0.5
+                            │
+CNN forward   t ≈ 6.55   │ <0.05s CPU
+LSTM forward  t ≈ 6.6    │ <0.05s CPU
+                            │
+priority 选中  t ≈ 6.6    │ pick_active + ENS = argmax+walk
+                            │
+queue 排出     t ≈ 6.6-8  │ UI 下次 update (≤200ms) 拿到新帧
+                            │
+banner 显示    t ≈ 7-8    │ FuncAnimation @ 5Hz
+                            │
+smoothstep 插完 t ≈ 13   │ 6s smoothstep 完成, 最终 FALL_IMPACT 完全显形
+
+总时延: ~7-8s (LSTM-ready 后) / ~14s (含 LSTM 冷启动)</pre>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    来源: 理论值, 用 receiver 6s / poll 0.5s / forward 0.05s 实测推算。
+    实际跑会在 [6s, 14s] 区间内, 取决于 LSTM 是否已 warmed up。
+  </div>
+</section>
+
+<!-- ========== §11 决策表 (Why) ========== -->
+<section id="s11" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§11</div>
+    <h2 class="text-2xl font-semibold text-gray-900">关键设计决策表 (Why)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    改这些决策点前必须先查本表 + 对应 dev_doc / 代码行号。
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>决策点</th><th>选择</th><th>为什么</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1 TX + 4 RX 拓扑</td><td>而非更多</td><td>单脚本会话成本; 4 板已够画等高线; 单房间尺度外推</td></tr>
+      <tr><td>WiFi 信道 6</td><td>2.4G 中段</td><td>多径稳定; ESP32 CSI 默认; 不与 1/11 干扰</td></tr>
+      <tr><td>192 子载波</td><td>HT 20MHz</td><td>ESP32 完整报告; 信道利用率高</td></tr>
+      <tr><td>921600 baud</td><td>串口高速档</td><td>192 subs × 8 byte × 70Hz ≈ 100KB/s, 115200 不够</td></tr>
+      <tr><td>6 类 (vs 5 类)</td><td>FALL → IMPACT + FLOORED</td><td>FALL 后段 ≈ STILL, 模型不可分。切开后才学得到冲击</td></tr>
+      <tr><td>9 × 6s 感受野</td><td>LSTM 16 窗 + CNN 单窗</td><td>覆盖站立→失稳→冲击→倒地+ 落地缓冲</td></tr>
+      <tr><td>LSTM 16 维手工</td><td>而非深度 LSTM 自动学</td><td>小数据 (7 session) 下手工特征方差/质心/ΔVar 更稳</td></tr>
+      <tr><td>CNN 32 通道 × 8 band</td><td>而非 4 通道全局 mean</td><td>保留 subcarrier 空间-频率多样性, mean 聚合扔掉太多</td></tr>
+      <tr><td>TorchScript (shipped) vs self-trained ckpt</td><td>后者 (我们走的路)</td><td>shipped Transformer 训练代码私有不可改; self-trained 链路可调试</td></tr>
+      <tr><td>α=0.5 默认</td><td>LSTM / CNN 平衡</td><td>实测 (D.22.4) 与 0.3 / 0.7 比最优</td></tr>
+      <tr><td>THRESHOLD=0.50</td><td>vs 0.84</td><td>0.50 平衡 (召回优先 demo); 0.84 严苛 (零误报)</td></tr>
+      <tr><td>PRIORITY_ORDER 临床优先</td><td>FALL_IMPACT 最高</td><td>跌倒不可漏报; STILL / EMPTY 即使误报代价低</td></tr>
+      <tr><td>strict RX 默认</td><td>缺板 HARD-FATAL</td><td>掉线 = 硬件问题, agent 不能伪造数据"绕过"</td></tr>
+      <tr><td>smoothstep 6s</td><td>而非硬跳</td><td>视觉与 collection_mouse.py 同样流畅感, 不会抽搐</td></tr>
+      <tr><td>队列 QUEUE_MAX=10 + drop-oldest</td><td>而非阻塞</td><td>UI 阻塞会丢数据; 丢旧比丢新好</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ========== §12 已知限制 ========== -->
+<section id="s12" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§12</div>
+    <h2 class="text-2xl font-semibold text-gray-900">已知限制 (Honest scope)</h2>
+  </div>
+
+  <div class="border border-amber-200 bg-amber-50 rounded-lg p-4 text-amber-900">
+    <p><strong>本仓库不是验证过的医疗/安全设备。</strong> MIT 许可证免责; 阈值与状态机计时是工程经验, 无临床证据。</p>
+  </div>
+
+  <ul class="list-disc list-inside text-gray-700 space-y-2">
+    <li><strong>训练集仅 7 个 session</strong>: LOOCV 在单房间同受试者下拿到 0.444 ensemble F1; <strong>未经跨房间 / 跨受试者验证</strong></li>
+    <li><strong>THRESHOLD=0.50 由单次 held-out 会话选定</strong>: 改前必须先复现 LOOCV + held-out 基线</li>
+    <li><strong>模型针对 FALL_IMPACT 单一二分类</strong>: 6 类标签在训练时间融合; 站/躺姿态、活体确认、CSI 静止检测均未做</li>
+    <li><strong>T1/T2/T3 计时为工程经验</strong>: 业务级 Twilio/Pusher 状态机, 这里 <strong>不展开</strong> (见 apps/server/src/state-machine.ts)</li>
+    <li><strong>无 LOOCV 复现脚本自动化</strong>: fall-detection-training/evaluation/loocv_eval.py 是入口但需要数据 + 用户触发</li>
+    <li><strong>外部数据 (CSI-HAR) 适配器存在但未跑通</strong>: external_data_adapter/csi_har_adapter.py 是迁移模板, 训练只用了我们自己的 7 会话</li>
+  </ul>
+
+  <hr class="my-8 border-gray-200"/>
+  <footer class="text-xs text-gray-500 space-y-1">
+    <p>📚 关联文档:</p>
+    <ul class="list-disc list-inside space-y-0.5">
+      <li><a href="0-references-2026-06-28.xml" class="text-blue-600 hover:underline">0-references-2026-06-28.xml</a> — 参考资料登记表</li>
+      <li><a href="3-bouy-repro-howto-2026-06-28.md" class="text-blue-600 hover:underline">3-bouy-repro-howto</a> — 复现 bootcamp 全流程</li>
+      <li><a href="5-bouy-post-arch-2026-06-30.md" class="text-blue-600 hover:underline">5-bouy-post-arch</a> — 训练后架构现状</li>
+      <li><a href="6-bouy-hang-root-cause-2026-06-30.md" class="text-blue-600 hover:underline">6-bouy-hang-root-cause</a> — hang 根因 (RX3 掉线)</li>
+      <li><a href="7-bouy-rx-disconnect-policy-2026-07-01.md" class="text-blue-600 hover:underline">7-bouy-rx-disconnect-policy</a> — 严格 RX 政策</li>
+      <li><a href="8-bouy-frontend-2026-07-01.md" class="text-blue-600 hover:underline">8-bouy-frontend</a> — 前端设计文档</li>
+      <li><a href="HANDOFF-2026-07-01.md" class="text-blue-600 hover:underline">HANDOFF-2026-07-01.md</a> — 上次会话交接</li>
+    </ul>
+    <p class="mono-tag mt-3">基于 2026-07-06 代码复盘 · MIT 许可证 (Bouy) · 非医疗设备</p>
+  </footer>
+</section>
 </main>
 
 <script>

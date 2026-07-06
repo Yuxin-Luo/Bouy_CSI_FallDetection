@@ -116,6 +116,30 @@ _DEFAULT_DATASET_DIR = _PROJECT_ROOT / "dataset"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# RX presence check (per user 2026-07-01 policy — see dev_doc/7)
+# A chunk's `rx_names` array declares which RX boards the receiver expected.
+# If `amplitudes_<name>` or `timestamps_<name>` is absent for any of them,
+# the RX board went offline at some point — this is a HARDWARE issue
+# (USB cable / board power / chip) that the agent cannot fix. We hard-fail
+# in main loop rather than silently degrading the inference (filling 0,
+# skipping the chunk, or falling back to CNN-only) — that would mask the
+# hardware problem and produce garbage predictions that look like real ones.
+# ─────────────────────────────────────────────────────────────────────────────
+def check_rx_presence(chunk_path: Path) -> tuple[list[str], list[str]]:
+    """Return (present, missing) RX names for one chunk.
+    present = rx names that have BOTH `amplitudes_<name>` and `timestamps_<name>`
+    missing = rx names in rx_names that lack either of those arrays
+    """
+    csi = np.load(chunk_path)
+    rx_names = [str(n) for n in csi["rx_names"]]
+    present = [n for n in rx_names
+               if f"amplitudes_{n}" in csi.files
+               and f"timestamps_{n}" in csi.files]
+    missing = [n for n in rx_names if n not in present]
+    return present, missing
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Per-chunk CNN spectrogram (1 CNN window = 1 receiver chunk)
 # Mirrors compute_band_spectrogram() in infer_loop.py.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -455,6 +479,13 @@ def main() -> int:
                     help="Weight on LSTM (1-alpha on CNN). Default = state.json.")
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     ap.add_argument("--poll-sec", type=float, default=0.5)
+    ap.add_argument("--allow-missing-rxs", action="store_true",
+                    help="Opt-in to lenient mode: warn + skip on missing RX "
+                         "boards. DEFAULT is STRICT — any missing RX triggers "
+                         "a hard-fail (sys.exit(2)) because the agent cannot "
+                         "fix the hardware issue. Use this flag only for "
+                         "offline replay on historical chunks with known gaps; "
+                         "do NOT use in live mode.")
     args = ap.parse_args()
 
     if not args.live_dir.exists():
@@ -511,6 +542,44 @@ def main() -> int:
             new_chunks = [p for p in chunks if p.name not in seen]
             for ck in new_chunks:
                 seen.add(ck.name)
+
+                # ── RX presence check (user 2026-07-01 policy) ──
+                # Per-chunk: if any RX in rx_names is missing both arrays,
+                # hard-fail with a clear FATAL banner. This is a hardware
+                # issue the agent cannot fix — see dev_doc/7.
+                present_rx, missing_rx = check_rx_presence(ck)
+                if missing_rx and not args.allow_missing_rxs:
+                    print("\n" + "=" * 72, file=sys.stderr, flush=True)
+                    print("  [FATAL] RX BOARD DISCONNECT DETECTED",
+                          file=sys.stderr, flush=True)
+                    print("=" * 72, file=sys.stderr, flush=True)
+                    print(f"  Chunk  : {ck.name}",
+                          file=sys.stderr, flush=True)
+                    print(f"  RX declared in chunk (rx_names): "
+                          f"{present_rx + missing_rx}",
+                          file=sys.stderr, flush=True)
+                    print(f"  RX present : {present_rx}",
+                          file=sys.stderr, flush=True)
+                    print(f"  RX MISSING : {missing_rx}",
+                          file=sys.stderr, flush=True)
+                    print("", file=sys.stderr, flush=True)
+                    print("  This is a HARDWARE issue "
+                          "(USB cable / board power / chip).",
+                          file=sys.stderr, flush=True)
+                    print("  Agent cannot fix it. Please check the physical setup,",
+                          file=sys.stderr, flush=True)
+                    print("  re-plug the missing board, and re-run.",
+                          file=sys.stderr, flush=True)
+                    print("  To replay partial historical data, pass "
+                          "--allow-missing-rxs", file=sys.stderr, flush=True)
+                    print("  (NOT recommended for live use).",
+                          file=sys.stderr, flush=True)
+                    print("=" * 72 + "\n", file=sys.stderr, flush=True)
+                    return 2
+                elif missing_rx:
+                    print(f"[warn {ck.name}] missing RX {missing_rx} "
+                          f"(continuing in lenient mode)")
+
                 try:
                     spec = chunk_to_cnn_spectrogram(ck)
                 except Exception as exc:
