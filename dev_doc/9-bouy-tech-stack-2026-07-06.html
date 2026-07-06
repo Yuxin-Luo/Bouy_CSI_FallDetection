@@ -201,6 +201,67 @@ flowchart LR
     src/pc_tools/receiver/csi_io.py ·
     collection_mouse.py:MULTIPORTREADER 配置 (921600, 0 buffer)
   </div>
+<!-- ========== §2 采集层 ========== -->
+<section id="s2" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§2</div>
+    <h2 class="text-2xl font-semibold text-gray-900">采集层 (Collection)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    <code>collection_mouse.py</code> 是 labeling-friendly 录制工具: 4 RX 串口实时读
+    (丢给 <code>MultiPortReader</code> 后台线程), 鼠标按键发 2-bit / 6-bit 协议标记类别。
+    每个 session 输出 3 个 sidecar 文件。
+  </p>
+
+  <!-- Mermaid: collection 时序 -->
+  <div class="mermaid">
+sequenceDiagram
+  participant U as User<br/>鼠标按键
+  participant F as Matplotlib<br/>Figure
+  participant B as MultiPortReader<br/>(4× daemon thread)
+  participant FS as csi.npz
+  participant JS as labels.json
+  participant MS as metadata.json
+  Note over B: 921600 baud, 0 buffer cap
+  loop 4 RX boards
+    B->>B: serial read non-blocking
+    B->>F: push (name, amplitudes[192], t_mono)
+  end
+  U->>F: mouse click (L/R bit)
+  F->>F: BitBuffer.push + tentative preview
+  Note right of F: 1s timeout → commit
+  F->>JS: append {t_start, t_end, class}
+  U->>F: middle click / SIGINT / close
+  F->>FS: save csi.npz (per-RX arrays)
+  F->>JS: save labels.json
+  F->>MS: save metadata.json
+  </div>
+
+  <!-- ASCII: NPZ chunk 文件结构 -->
+  <div>
+    <h3 class="text-lg font-semibold text-gray-800 mt-6">csi.npz 文件内部结构</h3>
+    <pre>csi.npz (≈ 几 MB / session)
+├─ rx_names:        ["RX1","RX2","RX3","RX4"]   4× str
+├─ timestamps_RX1:  float64[N]    N ≈ 70 × 60 × min
+├─ amplitudes_RX1:  float32[N, 192]              每包 → 192 subcarriers
+├─ timestamps_RX2:  ...
+├─ amplitudes_RX2:  ...
+└─ (RX3, RX4 同上)
+
+labels.json (人标)
+└─ segments: [{ t_start: float, t_end: float, class: str }, ...]
+   类别: EMPTY / STILL / WALKING / TRANSITION / FALL (orig 5 类)
+
+metadata.json
+├─ session_name, started_at, subject, notes
+├─ ports: [{path, name, packets}]
+└─ rx_warnings (运行时告警: 哪块 RX 在哪段时间 pkts=0)</pre>
+  </div>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: collection/collection_mouse.py:103-149 (BitBuffer) · csi_io.py:MultiPortReader ·
+    :Main 函数的 save_session 调用
+  </div>
 </section>
 </main>
 
