@@ -481,6 +481,72 @@ centroid = Σ(freq × |spec|²) / Σ|spec|² over band</pre>
     · fall-detection-training/training/train_cnn_deep.py:75-180 (extract_band_spectrograms_for_session)
   </div>
 </section>
+<!-- ========== §5 模型架构 ========== -->
+<section id="s5" class="space-y-4">
+  <div class="flex items-baseline gap-3">
+    <div class="text-blue-600 font-mono text-sm font-semibold">§5</div>
+    <h2 class="text-2xl font-semibold text-gray-900">模型架构 (LSTM + ResNet-CNN)</h2>
+  </div>
+  <p class="text-gray-600 max-w-3xl">
+    两条模型走两套特征、各自对小数据友好。
+    LSTM 是 stacked 单层 + MLP head; ResNet-CNN 是 4 stage + skip。
+  </p>
+
+  <h3 class="text-lg font-semibold text-gray-800 mt-4">LSTM (CSIClassifier)</h3>
+  <pre>Input:  (B, T_seq=16, F=16)
+   ↓
+LSTM(1 layer, hidden=64, batch_first=True)
+   ↓  (B, 16, 64)
+LayerNorm(64) → Dropout(0.3)
+   ↓
+Linear(64 → 32) → ReLU → Dropout(0.3)
+   ↓
+Linear(32 → 6)
+   ↓ softmax → (B, 6) class probs</pre>
+
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">ResNet-CNN (CSI_DeepCNN)</h3>
+  <pre>Input:  (B, C=32, F=49, T=21)
+   ↓
+Stem: Conv2d(32→32, 3×3) + BN + ReLU
+   ↓
+Stage 1: [ResBlock(32→32)] × 2
+   ↓
+Stage 2: [ResBlock(32→64, stride 2)] + [ResBlock(64→64)]
+   ↓
+Stage 3: [ResBlock(64→128, stride 2)] + [ResBlock(128→128)]
+   ↓
+Stage 4: [ResBlock(128→128)]
+   ↓
+AdaptiveAvgPool2d(1) → Flatten → (B, 128)
+   ↓
+Linear(128→128) → ReLU → Dropout(0.4)
+   ↓
+Linear(128→64) → ReLU → Dropout(0.4)
+   ↓
+Linear(64→6)
+   ↓ softmax → (B, 6) class probs
+~ 1.5M params (base=32, dense=128)</pre>
+
+  <h3 class="text-lg font-semibold text-gray-800 mt-6">对比</h3>
+  <table>
+    <thead>
+      <tr><th>维度</th><th>LSTM</th><th>ResNet-CNN</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>输入 shape</td><td>(B, 16, 16)</td><td>(B, 32, 49, 21)</td></tr>
+      <tr><td>时窗</td><td>8.5 s 上下文 (16 × 0.5 s + 当前)</td><td>6 s 单窗</td></tr>
+      <tr><td>参数量</td><td>~17 k</td><td>~1.5 M</td></tr>
+      <tr><td>训练速度</td><td>CPU 5 min / session</td><td>GPU 30 s/epoch</td></tr>
+      <tr><td>擅长</td><td>时间序列动态 (步频、停顿)</td><td>频谱形状 (冲击能量分布)</td></tr>
+      <tr><td>弱项</td><td>频域细节</td><td>长程时序</td></tr>
+    </tbody>
+  </table>
+
+  <div class="text-xs text-gray-500 mono-tag mt-2">
+    引用: train_lstm.py:281-341 (CSIClassifier)
+    · train_cnn_deep.py:372-428 (CSI_DeepCNN)
+  </div>
+</section>
 </main>
 
 <script>
