@@ -35,8 +35,78 @@
 <body>
 <main id="top" class="max-w-7xl mx-auto px-6 py-8 space-y-16">
 
-<!-- Hero placeholder (filled in Task 2) -->
-<section id="hero-placeholder" class="text-slate-400">[Hero placeholder — Task 2]</section>
+<!-- ========== HERO ========== -->
+<header class="border-b border-gray-200 pb-8">
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <div>
+      <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+        <span class="pill pill-blue">ESP32</span>
+        <span class="pill pill-green">WiFi CSI</span>
+        <span class="pill pill-amber">PyTorch</span>
+        <span class="pill pill-rose">MATPLOTLIB 实时</span>
+      </div>
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-900 leading-tight">
+        Bouy CSI Fall Detection · 技术栈全链路
+      </h1>
+      <p class="mt-3 text-gray-600 max-w-3xl">
+        把 "WiFi 信号 → 跌倒判定" 这条链路从硬件到屏幕可视化完整写下来。
+        范围: ESP32 固件 → 1 TX + 4 RX 采集 → 特征提取 → LSTM + CNN 训练 → α 融合 → 实时推理 → 前端展示。
+        <strong>不含</strong> Twilio / Pusher / Next.js 业务层。
+      </p>
+      <p class="mt-2 text-xs text-gray-500 mono-tag">
+        基于 2026-07-06 代码复盘 · docs in /dev_doc/ · spec: 9-bouy-tech-stack-html-design-2026-07-06.md
+      </p>
+    </div>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mt-8">
+    <div class="kpi-card">
+      <div class="text-xs text-gray-500 uppercase tracking-wider">子载波</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">192</div>
+      <div class="text-xs text-gray-500">OFDM @ 2.4GHz ch6</div>
+    </div>
+    <div class="kpi-card">
+      <div class="text-xs text-gray-500 uppercase tracking-wider">采样率</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">~70 Hz</div>
+      <div class="text-xs text-gray-500">每秒 CSI 包</div>
+    </div>
+    <div class="kpi-card">
+      <div class="text-xs text-gray-500 uppercase tracking-wider">类别</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">6</div>
+      <div class="text-xs text-gray-500">EMPTY..FLOORED</div>
+    </div>
+    <div class="kpi-card">
+      <div class="text-xs text-gray-500 uppercase tracking-wider">感受野</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">9 × 6s</div>
+      <div class="text-xs text-gray-500">≈ 14s 上下文</div>
+    </div>
+    <div class="kpi-card">
+      <div class="text-xs text-gray-500 uppercase tracking-wider">融合权重</div>
+      <div class="text-2xl font-bold text-gray-900 mt-1">α=0.50</div>
+      <div class="text-xs text-gray-500">LSTM / CNN 平衡</div>
+    </div>
+  </div>
+</header>
+
+<!-- ========== STICKY TOC ========== -->
+<nav class="sticky top-0 z-30 bg-white/90 backdrop-blur border border-gray-200 rounded-lg px-4 py-3 -mx-2">
+  <div class="text-xs uppercase tracking-wider text-gray-500 mb-2 font-semibold">目录</div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
+    <a href="#s1" class="toc-link">§1 硬件层</a>
+    <a href="#s2" class="toc-link">§2 采集层</a>
+    <a href="#s3" class="toc-link">§3 标签切分</a>
+    <a href="#s4" class="toc-link">§4 特征提取 ★</a>
+    <a href="#s5" class="toc-link">§5 模型架构</a>
+    <a href="#s6" class="toc-link">§6 训练</a>
+    <a href="#s7" class="toc-link">§7 Ensemble ★</a>
+    <a href="#s8" class="toc-link">§8 实时推理</a>
+    <a href="#s9" class="toc-link">§9 前端 ★</a>
+    <a href="#s10" class="toc-link">§10 时延累计</a>
+    <a href="#s11" class="toc-link">§11 决策表</a>
+    <a href="#s12" class="toc-link">§12 已知限制</a>
+  </div>
+</nav>
 
 </main>
 
