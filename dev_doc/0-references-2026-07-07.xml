@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<references date="2026-07-07" project="Bouy_CSI_FallDetection">
+  <!-- 继承 2026-06-28 的 refs (r001-r021) — 本次新增 r022-r042, 用于 10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md -->
+  <ref id="r022">
+    <title>csi-pose/host/csi_pipe/clockfit.py — BoardClockModel + 下凸包分段 LS 拟合</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/clockfit.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>核心：fit_board() 在 (esp_us, t_host) 散点上做下凸包 → 分段线性拟合;USB-UART 单侧延迟假设是关键</notes>
+  </ref>
+  <ref id="r023">
+    <title>csi-pose/host/csi_pipe/align.py — epoch split / gap fill / 共栅格 / 切窗</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/align.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>WIN=5 (5 包 × 56 SC = 280 通道); grid_bounds/grid_block 100Hz 共栅格 + 布尔 mask</notes>
+  </ref>
+  <ref id="r024">
+    <title>csi-pose/host/csi_pipe/samples.py — build() 编排: clockfit → link stream → grid → samples</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/samples.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>含 video 锚点 / anchor_shift_ns (csi↔cam 校正) / _cut_into 分块写入</notes>
+  </ref>
+  <ref id="r025">
+    <title>csi-pose/host/csi_pipe/m15_protocol.py — 采集协议 (seg 状态机)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/m15_protocol.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>capture 1|2 + 13 段 (9 个位置 × stand + sit + lie + 前后空)</notes>
+  </ref>
+  <ref id="r026">
+    <title>csi-pose/host/csi_pipe/store.py — HDF5 SessionWriter / SessionReader</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/store.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>RLock 串行化 (h5py 非线程安全);links/<rx><tx> 字段: t_ns/esp_us/iq/seq/rssi/noise/boot_id</notes>
+  </ref>
+  <ref id="r027">
+    <title>csi-pose/host/csi_pipe/mqtt_recorder.py — RecorderCore (MQTT → SessionWriter)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/mqtt_recorder.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>on_connect 内重新 subscribe (paho 1.x/2.x 双兼容);CRC 失败计数</notes>
+  </ref>
+  <ref id="r028">
+    <title>csi-pose/host/csi_pipe/align_verify.py — 对齐分解验证 (M0 判据 / 视频校正)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/align_verify.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>detect_gaps / csi_absolute_offsets / flip_offsets / camera_correction_ms / verdict()</notes>
+  </ref>
+  <ref id="r029">
+    <title>csi-pose/host/csi_pipe/rebuild.py — rawlog → HDF5 重构</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/rebuild.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>unwrap 跨文件连续 (boot_id 一致则同 epoch);StreamParser 每文件新实例</notes>
+  </ref>
+  <ref id="r030">
+    <title>csi-pose/host/csi_pipe/soak.py — soak 长期 rawlog → 报告</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_pipe/soak.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>M0 判据: ≥95pps 10 分钟 / loss<5% / 6+ 连续 ≤2 次/h / 废样率 <1%</notes>
+  </ref>
+  <ref id="r031">
+    <title>csi-pose/host/csi_host/unwrap.py — TimeUnwrapper (32-bit µs → 64-bit 单调)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_host/unwrap.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>WRAP=1<<32 (71.58 min); boot_id 变 → 新 epoch; t_us 后退 → wraps += 1</notes>
+  </ref>
+  <ref id="r032">
+    <title>csi-pose/host/csi_host/gap.py — LinkTracker (seq 跟踪, gap vs reset)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_host/gap.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>received / lost / resets; rebaseline() 处理 RX 重启; loss_ratio = lost / (received+lost)</notes>
+  </ref>
+  <ref id="r033">
+    <title>csi-pose/host/csi_host/framing.py — 130B 二进制帧 + StreamParser</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_host/framing.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>FRAME_MAGIC=0xC51D, 130B LE: magic|tx|seq|esp_us|rssi|noise|len|boot_id|iq|crc; CRC CCITT-FALSE</notes>
+  </ref>
+  <ref id="r034">
+    <title>csi-pose/host/csi_host/bridge_core.py — BridgeCore (串口 → MQTT 桥)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内参考)</url>
+    <local_path>../csi-pose/host/csi_host/bridge_core.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>pack_csi msgpack / stdlib fallback; topic "csi/rx{rx_id}"; ingest(t_ns, chunk) 由调用方贴 t_host</notes>
+  </ref>
+  <ref id="r035">
+    <title>Bouy collection/csi_io.py — MultiPortReader (单线程 selectors)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/collection/csi_io.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>单线程 kqueue/epoll;buffers[name] = deque[(time.monotonic(), amps)];无 host-clock 校正</notes>
+  </ref>
+  <ref id="r036">
+    <title>Bouy collection/collect.py — 标注会话录制</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/collection/collect.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>save_session() 写 csi.npz + labels.json + metadata.json;3s 启动期检测所有 RX</notes>
+  </ref>
+  <ref id="r037">
+    <title>Bouy training/train_lstm.py:90-162 — extract_features_for_session (锚 RX1 + 布尔掩码切窗)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/training/train_lstm.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>1s 窗 / 0.5s hop;F_per_rx=4 (var/delta_var/mean_amp/spectral_centroid);mask=(ts >= t_lo) & (ts < t_hi);chunk<5 → 0</notes>
+  </ref>
+  <ref id="r038">
+    <title>Bouy training/ensemble_predict.py:185-260 — align_by_time (LSTM↔CNN 跨模型对齐)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/training/ensemble_predict.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>tolerance 默认 1.0s (vs csi-pose 2ms) — 证实 Bouy 不需要亚秒同步</notes>
+  </ref>
+  <ref id="r039">
+    <title>Bouy evaluation/eval_seq9_ensemble.py:241-280 — 部署窗口 (6s win / 0.5s hop)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/evaluation/eval_seq9_ensemble.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>与 train_lstm 同一套锚 RX + 布尔掩码</notes>
+  </ref>
+  <ref id="r040">
+    <title>Bouy firmware/firmware_patches/csi_send_app_main.c — TX (esp_now_send + usleep 100Hz)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/firmware/firmware_patches/csi_send_app_main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>无 esp_timer 字段;CONFIG_SEND_FREQUENCY=100;固定 MAC 1a:00:00:00:00:00</notes>
+  </ref>
+  <ref id="r041">
+    <title>Bouy firmware/firmware_patches/csi_recv_app_main.c — RX (CSV ets_printf CSI_DATA, 丢弃 rx_ctrl->timestamp)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/firmware/firmware_patches/csi_recv_app_main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>memcmp(info->mac) 过滤;rx_id 从 info->payload+15 取;first_word_invalid 4-byte skip (S3)</notes>
+  </ref>
+  <ref id="r042">
+    <title>Bouy labeling/split_fall_labels.py — FALL → FALL_IMPACT + FLOORED</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>fall-detection-training/labeling/split_fall_labels.py</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>--impact-sec 默认 1.5s;FLOORED = 落地后静止 — 与 STILL 难分,故引入 FALL_IMPACT 单独类</notes>
+  </ref>
+  <!-- 2026-07-08 修订补充: csi-pose 拓扑证据 + 固件层细节 -->
+  <ref id="r043">
+    <title>csi-pose/docs/csi-pose-techstack.html — tech stack 文档(显式声明 3TX × 3RX = 9 链路)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>../csi-pose/docs/csi-pose-techstack.html</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>L405 "csi-pose 把 Intel 5300 上的 WiSPPN(3×3 天线矩阵)移植到 6 块 ESP32-S3 上(3TX×3RX = 9 链路)";L461 标题 "2.1 3TX × 3RX 链路矩阵";L543 表格 "链路总数 | 9 | 3TX × 3RX";L835 "50 ms = 5 packets × 56 SC × 9 links"</notes>
+  </ref>
+  <ref id="r044">
+    <title>csi-pose/firmware/tx/main/main.c — TX beacon 固件(16B {magic, tx_idx, seq}, esp_timer 周期 10ms=100pps)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>../csi-pose/firmware/tx/main/main.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>TX 不在 beacon 上烧它自己的 esp_timer,esp_timer 是 RX 收到时盖戳 (见 r045)</notes>
+  </ref>
+  <ref id="r045">
+    <title>csi-pose/firmware/rx/main/csi_rx.c — RX 固件(esp_timer_get_time() 在收到时盖戳,tx_idx < 3 硬约束)</title>
+    <type>user-code</type>
+    <url>(无 — 项目内)</url>
+    <local_path>../csi-pose/firmware/rx/main/csi_rx.c</local_path>
+    <status>active</status>
+    <trust>high</trust>
+    <used_in>10-csi-pose-vs-bouy-sync-mechanism-2026-07-07.md</used_in>
+    <notes>L23 `out->tx_idx < 3` (3 TX 硬约束);L74-75 `it.t_us = (uint32_t)esp_timer_get_time()` (RX 盖戳);L68 `s_st.mac_reject++` (tx_idx 伪装检测)</notes>
+  </ref>
+</references>
